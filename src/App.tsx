@@ -1,51 +1,127 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useApp } from "@/contexts/AppContext";
+import { MuteIndicator } from "@/components/MuteIndicator";
+import { ProfileCard } from "@/components/ProfileCard";
+import { ProfileEditor } from "@/components/ProfileEditor";
+import type { HotkeyProfile } from "@/contexts/AppContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, Plus } from "lucide-react";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const { profiles, activeProfile, refreshDevices } = useApp();
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<HotkeyProfile | null>(null);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const handleNewProfile = () => {
+    setEditingProfile(null);
+    setShowEditor(true);
+  };
+
+  const handleEditProfile = (profile: HotkeyProfile) => {
+    setEditingProfile(profile);
+    setShowEditor(true);
+  };
+
+  const handleCloseEditor = () => {
+    setShowEditor(false);
+    setEditingProfile(null);
+  };
+
+  const handleRefreshDevices = async () => {
+    await refreshDevices();
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <main className="container mx-auto p-6 space-y-6 max-w-7xl">
+      <header className="text-center space-y-2 pb-6">
+        <h1 className="text-4xl font-bold">🎤 TogMic</h1>
+        <p className="text-lg text-muted-foreground">Microphone Control with Global Hotkeys</p>
+      </header>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      <Card>
+        <CardContent className="pt-6 space-y-6">
+          <MuteIndicator />
+          
+          <Separator />
+          
+          {activeProfile && (
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">Active Profile</p>
+              <h3 className="text-xl font-semibold">{activeProfile.name}</h3>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-sm text-muted-foreground">Hotkey:</span>
+                <Badge variant="secondary" className="font-mono">
+                  {activeProfile.toggle_key}
+                </Badge>
+              </div>
+            </div>
+          )}
+          
+          {!activeProfile && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No active profile. Create a profile to get started.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Profiles</CardTitle>
+              <CardDescription>Manage your microphone control profiles</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleRefreshDevices} 
+                variant="outline" 
+                size="sm"
+                title="Refresh audio devices"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              <Button onClick={handleNewProfile} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                New Profile
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {profiles.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No profiles yet. Create your first profile to control your microphone with hotkeys!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {profiles.map(profile => (
+                <ProfileCard
+                  key={profile.id}
+                  profile={profile}
+                  isActive={activeProfile?.id === profile.id}
+                  onEdit={() => handleEditProfile(profile)}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <ProfileEditor
+        profile={editingProfile}
+        onSave={handleCloseEditor}
+        onCancel={handleCloseEditor}
+        open={showEditor}
+      />
     </main>
   );
 }
 
 export default App;
+

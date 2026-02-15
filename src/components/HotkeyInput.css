@@ -1,0 +1,32 @@
+.hotkey-input input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-family: monospace;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hotkey-input input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.hotkey-input input.recording {
+  border-color: #10b981;
+  background: #f0fdf4;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
