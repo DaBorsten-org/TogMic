@@ -1,4 +1,5 @@
 mod audio;
+mod sound;
 
 use audio::{AudioController, AudioDevice, PlatformAudioController};
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,6 @@ pub struct HotkeyProfile {
     pub name: String,
     pub toggle_key: String,
     pub device_ids: Vec<String>,
-    pub start_muted: bool,
 }
 
 #[derive(Default)]
@@ -60,6 +60,13 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
         
         *is_muted_lock = new_state;
         
+        // Play sound feedback
+        if new_state {
+            sound::play_mute_sound();
+        } else {
+            sound::play_unmute_sound();
+        }
+        
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", new_state);
         
@@ -82,6 +89,13 @@ fn set_mute(muted: bool, state: State<AppState>, app: AppHandle) -> Result<(), S
         
         let mut is_muted_lock = state.is_muted.lock().unwrap();
         *is_muted_lock = muted;
+        
+        // Play sound feedback
+        if muted {
+            sound::play_mute_sound();
+        } else {
+            sound::play_unmute_sound();
+        }
         
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", muted);
@@ -119,25 +133,10 @@ fn save_profile(profile: HotkeyProfile) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_active_profile(profile: HotkeyProfile, state: State<AppState>, app: AppHandle) -> Result<(), String> {
+fn set_active_profile(profile: HotkeyProfile, state: State<AppState>) -> Result<(), String> {
     // Set the new active profile
     let mut profile_lock = state.current_profile.lock().unwrap();
     *profile_lock = Some(profile.clone());
-    
-    // Apply start_muted state if specified
-    if profile.start_muted {
-        let controller_lock = state.audio_controller.lock().unwrap();
-        if let Some(controller) = controller_lock.as_ref() {
-            for device_id in &profile.device_ids {
-                let _ = controller.set_mute_state(device_id, true);
-            }
-            
-            let mut is_muted_lock = state.is_muted.lock().unwrap();
-            *is_muted_lock = true;
-            
-            let _ = app.emit("mute-state-changed", true);
-        }
-    }
     
     Ok(())
 }
@@ -184,6 +183,13 @@ fn register_hotkey(hotkey: String, app: AppHandle, state: State<AppState>) -> Re
                 
                 *is_muted_lock = new_state;
                 
+                // Play sound feedback
+                if new_state {
+                    sound::play_mute_sound();
+                } else {
+                    sound::play_unmute_sound();
+                }
+                
                 // Emit event to frontend
                 let _ = app.emit("mute-state-changed", new_state);
             }
@@ -198,6 +204,31 @@ fn unregister_hotkey(app: AppHandle) -> Result<(), String> {
     app.global_shortcut()
         .unregister_all()
         .map_err(|e| format!("Failed to unregister hotkeys: {}", e))
+}
+
+#[tauri::command]
+async fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
+    let autostart_manager = app.state::<tauri_plugin_autostart::AutoLaunchManager>();
+    
+    if enabled {
+        autostart_manager
+            .enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))?;
+    } else {
+        autostart_manager
+            .disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_autostart_status(app: AppHandle) -> Result<bool, String> {
+    let autostart_manager = app.state::<tauri_plugin_autostart::AutoLaunchManager>();
+    autostart_manager
+        .is_enabled()
+        .map_err(|e| format!("Failed to get autostart status: {}", e))
 }
 
 // Helper function for hotkey callback
@@ -215,6 +246,13 @@ fn toggle_mute_internal(state: &AppState, app: &AppHandle) -> Result<bool, Strin
         }
         
         *is_muted_lock = new_state;
+        
+        // Play sound feedback
+        if new_state {
+            sound::play_mute_sound();
+        } else {
+            sound::play_unmute_sound();
+        }
         
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", new_state);
@@ -297,6 +335,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             get_audio_devices,
@@ -308,6 +351,8 @@ pub fn run() {
             get_active_profile,
             register_hotkey,
             unregister_hotkey,
+            set_autostart,
+            get_autostart_status,
         ])
         .setup(|app| {
             setup_tray(app.handle())?;

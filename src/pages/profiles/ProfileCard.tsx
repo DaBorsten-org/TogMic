@@ -1,5 +1,5 @@
-import { useApp } from "@/contexts/AppContext";
-import type { HotkeyProfile } from "@/contexts/AppContext";
+import { useApp } from "@/contexts/AppContent";
+import type { HotkeyProfile } from "@/contexts/AppContent";
 import {
   Card,
   CardHeader,
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Play, Edit, Trash2, MicOff } from "lucide-react";
+import { Play, Edit, Trash2 } from "lucide-react";
 
 interface ProfileCardProps {
   profile: HotkeyProfile;
@@ -75,16 +75,6 @@ export function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
           <p className="text-sm text-muted-foreground">Devices</p>
           <p className="text-sm">{getDeviceNames()}</p>
         </div>
-
-        {profile.start_muted && (
-          <>
-            <Separator />
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MicOff className="h-4 w-4" />
-              <span>Starts muted</span>
-            </div>
-          </>
-        )}
       </CardContent>
 
       <CardFooter className="flex gap-2">

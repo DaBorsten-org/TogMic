@@ -15,6 +15,10 @@
     "store:allow-set",
     "store:allow-save",
     "store:allow-delete",
-    "store:default"
+    "store:default",
+    "updater:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

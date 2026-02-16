@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useApp } from "@/contexts/AppContext";
-import type { HotkeyProfile } from "@/contexts/AppContext";
-import { HotkeyInput } from "./HotkeyInput";
+import { useApp } from "@/contexts/AppContent";
+import type { HotkeyProfile } from "@/contexts/AppContent";
+import { HotkeyInput } from "@/components/HotkeyInput";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +35,6 @@ export function ProfileEditor({
   const [selectedDevices, setSelectedDevices] = useState<string[]>(
     profile?.device_ids || [],
   );
-  const [startMuted, setStartMuted] = useState(profile?.start_muted || false);
   const [error, setError] = useState("");
 
   const handleDeviceToggle = (deviceId: string) => {
@@ -71,7 +70,6 @@ export function ProfileEditor({
         name: name.trim(),
         toggle_key: toggleKey,
         device_ids: selectedDevices,
-        start_muted: startMuted,
       };
 
       await saveProfile(newProfile);
@@ -134,20 +132,6 @@ export function ProfileEditor({
                 ))
               )}
             </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="startMuted"
-              checked={startMuted}
-              onCheckedChange={(checked) => setStartMuted(!!checked)}
-            />
-            <Label
-              htmlFor="startMuted"
-              className="text-sm font-normal cursor-pointer"
-            >
-              Start muted on app launch
-            </Label>
           </div>
 
           {error && <div className="text-sm text-destructive">{error}</div>}

@@ -15,7 +15,12 @@ export interface HotkeyProfile {
   name: string;
   toggle_key: string;
   device_ids: string[];
-  start_muted: boolean;
+}
+
+export interface AppSettings {
+  startMuted: boolean;
+  autostart: boolean;
+  checkUpdates: boolean;
 }
 
 interface AppContextType {
@@ -23,6 +28,7 @@ interface AppContextType {
   profiles: HotkeyProfile[];
   activeProfile: HotkeyProfile | null;
   isMuted: boolean;
+  settings: AppSettings;
   refreshDevices: () => Promise<void>;
   toggleMute: () => Promise<void>;
   setMute: (muted: boolean) => Promise<void>;
@@ -30,6 +36,7 @@ interface AppContextType {
   deleteProfile: (id: string) => Promise<void>;
   setActiveProfile: (profile: HotkeyProfile) => Promise<void>;
   registerHotkey: (hotkey: string) => Promise<void>;
+  updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -40,6 +47,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeProfile, setActiveProfileState] = useState<HotkeyProfile | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [store, setStore] = useState<Store | null>(null);
+  const [settings, setSettings] = useState<AppSettings>({
+    startMuted: false,
+    autostart: false,
+    checkUpdates: true,
+  });
 
   // Initialize store
   useEffect(() => {
@@ -190,6 +202,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Update settings
+  const updateSettings = async (newSettings: Partial<AppSettings>) => {
+    if (!store) return;
+    
+    try {
+      const updatedSettings = { ...settings, ...newSettings };
+      setSettings(updatedSettings);
+      await store.set('app_settings', updatedSettings);
+      await store.save();
+
+      // Apply autostart setting
+      if (newSettings.autostart !== undefined) {
+        await invoke('set_autostart', { enabled: newSettings.autostart });
+      }
+
+      // Apply start muted setting if there's an active profile
+      if (newSettings.startMuted !== undefined && activeProfile) {
+        await setMute(newSettings.startMuted);
+      }
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      throw error;
+    }
+  };
+
   // Initialize on mount
   useEffect(() => {
     if (!store) return;
@@ -197,8 +234,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     
     const init = async () => {
+      // Load settings
+      try {
+        const storedSettings = await store.get<AppSettings>('app_settings');
+        if (storedSettings && mounted) {
+          setSettings(storedSettings);
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+
       await refreshDevices();
       await loadProfiles();
+
+      // Apply start muted if enabled and profile is active
+      const storedSettings = await store.get<AppSettings>('app_settings');
+      if (storedSettings?.startMuted && mounted) {
+        await setMute(true);
+      }
     };
     
     init();
@@ -221,6 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     profiles,
     activeProfile,
     isMuted,
+    settings,
     refreshDevices,
     toggleMute,
     setMute,
@@ -228,6 +282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteProfile,
     setActiveProfile,
     registerHotkey,
+    updateSettings,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
