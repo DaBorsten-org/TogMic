@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - 'main'
-    tags:
-      - 'v*'
-  workflow_dispatch:
 
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 jobs:
@@ -42,7 +39,7 @@ jobs:
         run: bun install
 
       - name: Build the app
-        uses: tauri-apps/tauri-action@latest
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
