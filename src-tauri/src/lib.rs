@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, State, menu::{MenuBuilder, MenuItemBuil
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use std::str::FromStr;
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
+use tauri::image::Image as TauriImage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeyProfile {
@@ -23,6 +24,7 @@ pub struct AppState {
     pub is_muted: Arc<Mutex<bool>>,
     pub devices: Arc<Mutex<Vec<AudioDevice>>>,
     pub audio_controller: Arc<Mutex<Option<PlatformAudioController>>>,
+    pub close_to_tray: Arc<Mutex<bool>>,
 }
 
 // Tauri Commands
@@ -51,7 +53,13 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
     
     if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
         let mut is_muted_lock = state.is_muted.lock().unwrap();
-        let new_state = !*is_muted_lock;
+        // Read actual mute state from system to stay in sync
+        let actual_muted = if let Some(first_device) = profile.device_ids.first() {
+            controller.get_mute_state(first_device).unwrap_or(*is_muted_lock)
+        } else {
+            *is_muted_lock
+        };
+        let new_state = !actual_muted;
         
         // Apply mute state to all devices in profile
         for device_id in &profile.device_ids {
@@ -69,6 +77,9 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
         
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", new_state);
+        
+        // Update tray icon
+        update_tray_icon(&app, new_state);
         
         Ok(new_state)
     } else {
@@ -100,6 +111,9 @@ fn set_mute(muted: bool, state: State<AppState>, app: AppHandle) -> Result<(), S
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", muted);
         
+        // Update tray icon
+        update_tray_icon(&app, muted);
+        
         Ok(())
     } else {
         Err("No active profile or audio controller not initialized".to_string())
@@ -108,6 +122,20 @@ fn set_mute(muted: bool, state: State<AppState>, app: AppHandle) -> Result<(), S
 
 #[tauri::command]
 fn get_mute_state(state: State<AppState>) -> Result<bool, String> {
+    // Read actual mute state from the system instead of using cached value
+    let controller_lock = state.audio_controller.lock().unwrap();
+    let profile_lock = state.current_profile.lock().unwrap();
+    
+    if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
+        if let Some(first_device) = profile.device_ids.first() {
+            if let Ok(system_muted) = controller.get_mute_state(first_device) {
+                let mut is_muted_lock = state.is_muted.lock().unwrap();
+                *is_muted_lock = system_muted;
+                return Ok(system_muted);
+            }
+        }
+    }
+    
     let is_muted_lock = state.is_muted.lock().unwrap();
     Ok(*is_muted_lock)
 }
@@ -174,7 +202,13 @@ fn register_hotkey(hotkey: String, app: AppHandle, state: State<AppState>) -> Re
             
             if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
                 let mut is_muted_lock = is_muted.lock().unwrap();
-                let new_state = !*is_muted_lock;
+                // Read actual mute state from system to stay in sync
+                let actual_muted = if let Some(first_device) = profile.device_ids.first() {
+                    controller.get_mute_state(first_device).unwrap_or(*is_muted_lock)
+                } else {
+                    *is_muted_lock
+                };
+                let new_state = !actual_muted;
                 
                 // Apply mute state to all devices in profile
                 for device_id in &profile.device_ids {
@@ -192,6 +226,9 @@ fn register_hotkey(hotkey: String, app: AppHandle, state: State<AppState>) -> Re
                 
                 // Emit event to frontend
                 let _ = app.emit("mute-state-changed", new_state);
+                
+                // Update tray icon
+                update_tray_icon(app, new_state);
             }
         })
         .map_err(|e| format!("Failed to register hotkey: {}", e))?;
@@ -231,6 +268,33 @@ async fn get_autostart_status(app: AppHandle) -> Result<bool, String> {
         .map_err(|e| format!("Failed to get autostart status: {}", e))
 }
 
+#[tauri::command]
+fn set_close_to_tray(enabled: bool, state: State<AppState>) -> Result<(), String> {
+    let mut close_to_tray = state.close_to_tray.lock().unwrap();
+    *close_to_tray = enabled;
+    Ok(())
+}
+
+// Helper function to update the tray icon based on mute state
+fn update_tray_icon(app: &AppHandle, is_muted: bool) {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let icon = if is_muted {
+            TauriImage::from_path("icons/tray-muted.png")
+        } else {
+            TauriImage::from_path("icons/tray-unmuted.png")
+        };
+        if let Ok(icon) = icon {
+            let _ = tray.set_icon(Some(icon));
+        }
+        let tooltip = if is_muted {
+            "TogMic - Muted"
+        } else {
+            "TogMic - Unmuted"
+        };
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
 // Helper function for hotkey callback
 fn toggle_mute_internal(state: &AppState, app: &AppHandle) -> Result<bool, String> {
     let controller_lock = state.audio_controller.lock().unwrap();
@@ -238,7 +302,13 @@ fn toggle_mute_internal(state: &AppState, app: &AppHandle) -> Result<bool, Strin
     
     if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
         let mut is_muted_lock = state.is_muted.lock().unwrap();
-        let new_state = !*is_muted_lock;
+        // Read actual mute state from system to stay in sync
+        let actual_muted = if let Some(first_device) = profile.device_ids.first() {
+            controller.get_mute_state(first_device).unwrap_or(*is_muted_lock)
+        } else {
+            *is_muted_lock
+        };
+        let new_state = !actual_muted;
         
         // Apply mute state to all devices in profile
         for device_id in &profile.device_ids {
@@ -256,6 +326,9 @@ fn toggle_mute_internal(state: &AppState, app: &AppHandle) -> Result<bool, Strin
         
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", new_state);
+        
+        // Update tray icon
+        update_tray_icon(app, new_state);
         
         Ok(new_state)
     } else {
@@ -275,9 +348,14 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
     
-    let _tray = TrayIconBuilder::new()
+    let initial_icon = TauriImage::from_path("icons/tray-unmuted.png")
+        .unwrap_or_else(|_| TauriImage::from_bytes(include_bytes!("../icons/icon.png")).expect("fallback icon"));
+    
+    let _tray = TrayIconBuilder::with_id("main-tray")
+        .icon(initial_icon)
         .menu(&menu)
-        .tooltip("TogMic - Microphone Control")
+        .show_menu_on_left_click(false)
+        .tooltip("TogMic - Unmuted")
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
                 "toggle" => {
@@ -304,10 +382,8 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             } = event
             {
                 let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                let state = app.state::<AppState>();
+                let _ = toggle_mute_internal(&state, app);
             }
         })
         .build(app)?;
@@ -353,9 +429,68 @@ pub fn run() {
             unregister_hotkey,
             set_autostart,
             get_autostart_status,
+            set_close_to_tray,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                let state = app.state::<AppState>();
+                let close_to_tray = state.close_to_tray.lock().unwrap();
+                if *close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             setup_tray(app.handle())?;
+            
+            // Initialize persistent audio playback thread
+            sound::init();
+            
+            // Start background polling thread to sync mute state with system
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                // Initialize audio subsystem for this thread (e.g., COM on Windows)
+                let _ = PlatformAudioController::init_thread();
+                
+                let poll_controller = match PlatformAudioController::new() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("Failed to create polling audio controller: {}", e);
+                        return;
+                    }
+                };
+                
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    
+                    let state = app_handle.state::<AppState>();
+                    
+                    // Get the first device ID from the active profile
+                    let device_id = {
+                        let profile_lock = state.current_profile.lock().unwrap();
+                        profile_lock.as_ref().and_then(|p| p.device_ids.first().cloned())
+                    };
+                    
+                    if let Some(device_id) = device_id {
+                        if let Ok(system_muted) = poll_controller.get_mute_state(&device_id) {
+                            let mut is_muted_lock = state.is_muted.lock().unwrap();
+                            if *is_muted_lock != system_muted {
+                                *is_muted_lock = system_muted;
+                                drop(is_muted_lock);
+                                
+                                // Emit event to frontend
+                                let _ = app_handle.emit("mute-state-changed", system_muted);
+                                
+                                // Update tray icon
+                                update_tray_icon(&app_handle, system_muted);
+                            }
+                        }
+                    }
+                }
+            });
+            
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -27,6 +27,15 @@ pub trait AudioController {
     where
         Self: Sized;
     
+    /// Initialize audio subsystem for the current thread (e.g., COM on Windows).
+    /// Must be called before using audio methods on a new thread.
+    fn init_thread() -> Result<(), String>
+    where
+        Self: Sized,
+    {
+        Ok(())
+    }
+    
     fn enumerate_input_devices(&self) -> Result<Vec<AudioDevice>, String>;
     
     fn get_mute_state(&self, device_id: &str) -> Result<bool, String>;

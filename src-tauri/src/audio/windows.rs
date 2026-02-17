@@ -59,6 +59,14 @@ impl AudioController for WindowsAudioController {
         Ok(WindowsAudioController)
     }
 
+    fn init_thread() -> StdResult<(), String> {
+        unsafe {
+            // Initialize COM for the current thread (needed for background polling threads)
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        Ok(())
+    }
+
     fn enumerate_input_devices(&self) -> StdResult<Vec<AudioDevice>, String> {
         unsafe {
             let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)

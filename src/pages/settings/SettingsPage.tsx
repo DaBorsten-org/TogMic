@@ -46,6 +46,14 @@ export function SettingsPage() {
     }
   };
 
+  const handleCloseToTrayChange = async (checked: boolean) => {
+    try {
+      await updateSettings({ closeToTray: checked });
+    } catch (error) {
+      console.error("Failed to update close to tray setting:", error);
+    }
+  };
+
   const handleCheckForUpdates = async () => {
     setIsCheckingUpdate(true);
     setUpdateStatus("Checking for updates...");
@@ -169,6 +177,22 @@ export function SettingsPage() {
               id="check-updates"
               checked={settings.checkUpdates}
               onCheckedChange={handleCheckUpdatesChange}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="close-to-tray" className="text-base">
+                {t("closeToTray", "Close to System Tray")}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t("closeToTrayDescription", "Minimize to system tray instead of quitting when closing the window")}
+              </p>
+            </div>
+            <Switch
+              id="close-to-tray"
+              checked={settings.closeToTray}
+              onCheckedChange={handleCloseToTrayChange}
             />
           </div>
         </CardContent>

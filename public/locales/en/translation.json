@@ -1,5 +1,7 @@
 {
   "dashboard": "Dashboard",
   "profiles": "Profiles",
-  "settings": "Settings"
+  "settings": "Settings",
+  "closeToTray": "Close to System Tray",
+  "closeToTrayDescription": "Minimize to system tray instead of quitting when closing the window"
 }

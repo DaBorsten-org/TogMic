@@ -21,6 +21,7 @@ export interface AppSettings {
   startMuted: boolean;
   autostart: boolean;
   checkUpdates: boolean;
+  closeToTray: boolean;
 }
 
 interface AppContextType {
@@ -51,6 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startMuted: false,
     autostart: false,
     checkUpdates: true,
+    closeToTray: false,
   });
 
   // Initialize store
@@ -217,6 +219,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await invoke('set_autostart', { enabled: newSettings.autostart });
       }
 
+      // Apply close to tray setting
+      if (newSettings.closeToTray !== undefined) {
+        await invoke('set_close_to_tray', { enabled: newSettings.closeToTray });
+      }
+
       // Apply start muted setting if there's an active profile
       if (newSettings.startMuted !== undefined && activeProfile) {
         await setMute(newSettings.startMuted);
@@ -251,6 +258,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const storedSettings = await store.get<AppSettings>('app_settings');
       if (storedSettings?.startMuted && mounted) {
         await setMute(true);
+      }
+
+      // Sync close-to-tray setting with backend
+      if (storedSettings?.closeToTray !== undefined) {
+        await invoke('set_close_to_tray', { enabled: storedSettings.closeToTray });
       }
     };
     

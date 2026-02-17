@@ -1,5 +1,7 @@
 {
   "dashboard": "Dashboard",
   "profiles": "Profile",
-  "settings": "Einstellungen"
+  "settings": "Einstellungen",
+  "closeToTray": "In den System Tray minimieren",
+  "closeToTrayDescription": "Beim Schließen des Fensters in den System Tray minimieren, anstatt die App zu beenden"
 }

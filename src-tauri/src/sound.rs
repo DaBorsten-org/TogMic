@@ -1,28 +1,42 @@
-use rodio::{OutputStream, Sink, Source};
-use std::time::Duration;
+/// Embedded WAV files
+const MUTE_WAV: &[u8] = include_bytes!("../resources/mute.wav");
+const UNMUTE_WAV: &[u8] = include_bytes!("../resources/unmute.wav");
 
-/// Play a beep sound with the specified frequency
-fn play_beep(frequency: f32, duration_ms: u64) {
-    std::thread::spawn(move || {
-        if let Ok((_stream, stream_handle)) = OutputStream::try_default() {
-            if let Ok(sink) = Sink::try_new(&stream_handle) {
-                let source = rodio::source::SineWave::new(frequency)
-                    .take_duration(Duration::from_millis(duration_ms))
-                    .amplify(0.20); // 20% volume to not be too loud
-                
-                sink.append(source);
-                sink.sleep_until_end();
-            }
-        }
-    });
+/// Initialize the sound system (no-op now, kept for API compatibility)
+pub fn init() {}
+
+/// Play a WAV buffer using the native Windows PlaySound API (async, no resampling)
+#[cfg(target_os = "windows")]
+fn play_wav(data: &'static [u8]) {
+    use windows::Win32::Media::Audio::{
+        PlaySoundA, SND_ASYNC, SND_MEMORY, SND_NODEFAULT,
+    };
+    use windows::Win32::Foundation::HMODULE;
+
+    unsafe {
+        // SND_MEMORY: data points to in-memory WAV
+        // SND_ASYNC: play asynchronously (don't block)
+        // SND_NODEFAULT: don't play default sound on error
+        let _ = PlaySoundA(
+            windows::core::PCSTR(data.as_ptr()),
+            HMODULE::default(),
+            SND_MEMORY | SND_ASYNC | SND_NODEFAULT,
+        );
+    }
 }
 
-/// Play a lower tone (300 Hz) when muting
+#[cfg(not(target_os = "windows"))]
+fn play_wav(_data: &'static [u8]) {
+    // TODO: implement for other platforms
+    eprintln!("Sound playback not implemented on this platform");
+}
+
+/// Play the mute sound
 pub fn play_mute_sound() {
-    play_beep(300.0, 100);
+    play_wav(MUTE_WAV);
 }
 
-/// Play a higher tone (600 Hz) when unmuting
+/// Play the unmute sound
 pub fn play_unmute_sound() {
-    play_beep(600.0, 100);
+    play_wav(UNMUTE_WAV);
 }
