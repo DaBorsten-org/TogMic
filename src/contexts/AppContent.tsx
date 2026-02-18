@@ -109,9 +109,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Set mute state explicitly
-  const setMute = async (muted: boolean) => {
+  const setMute = async (muted: boolean, silent?: boolean) => {
     try {
-      await invoke('set_mute', { muted });
+      await invoke('set_mute', { muted, silent });
       setIsMuted(muted);
     } catch (error) {
       console.error('Failed to set mute:', error);
@@ -224,10 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await invoke('set_close_to_tray', { enabled: newSettings.closeToTray });
       }
 
-      // Apply start muted setting if there's an active profile
-      if (newSettings.startMuted !== undefined && activeProfile) {
-        await setMute(newSettings.startMuted);
-      }
+      // Note: startMuted is only applied on app startup, not when toggling the setting
     } catch (error) {
       console.error('Failed to update settings:', error);
       throw error;
@@ -257,7 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Apply start muted if enabled and profile is active
       const storedSettings = await store.get<AppSettings>('app_settings');
       if (storedSettings?.startMuted && mounted) {
-        await setMute(true);
+        await setMute(true, true); // Silent mute on startup
       }
 
       // Sync close-to-tray setting with backend

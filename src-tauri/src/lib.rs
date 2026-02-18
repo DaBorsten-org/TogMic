@@ -4,7 +4,7 @@ mod sound;
 use audio::{AudioController, AudioDevice, PlatformAudioController};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State, menu::{MenuBuilder, MenuItemBuilder}};
+use tauri::{AppHandle, Emitter, Manager, State, menu::{MenuBuilder, MenuItemBuilder}, path::BaseDirectory};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use std::str::FromStr;
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
@@ -26,6 +26,9 @@ pub struct AppState {
     pub audio_controller: Arc<Mutex<Option<PlatformAudioController>>>,
     pub close_to_tray: Arc<Mutex<bool>>,
 }
+
+const TRAY_MUTED_BYTES: &[u8] = include_bytes!("../icons/tray-muted.png");
+const TRAY_UNMUTED_BYTES: &[u8] = include_bytes!("../icons/tray-unmuted.png");
 
 // Tauri Commands
 
@@ -88,7 +91,7 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn set_mute(muted: bool, state: State<AppState>, app: AppHandle) -> Result<(), String> {
+fn set_mute(muted: bool, silent: Option<bool>, state: State<AppState>, app: AppHandle) -> Result<(), String> {
     let controller_lock = state.audio_controller.lock().unwrap();
     let profile_lock = state.current_profile.lock().unwrap();
     
@@ -101,11 +104,13 @@ fn set_mute(muted: bool, state: State<AppState>, app: AppHandle) -> Result<(), S
         let mut is_muted_lock = state.is_muted.lock().unwrap();
         *is_muted_lock = muted;
         
-        // Play sound feedback
-        if muted {
-            sound::play_mute_sound();
-        } else {
-            sound::play_unmute_sound();
+        // Play sound feedback only if not silent
+        if !silent.unwrap_or(false) {
+            if muted {
+                sound::play_mute_sound();
+            } else {
+                sound::play_unmute_sound();
+            }
         }
         
         // Emit event to frontend
@@ -275,17 +280,28 @@ fn set_close_to_tray(enabled: bool, state: State<AppState>) -> Result<(), String
     Ok(())
 }
 
+fn load_tray_image(app: &AppHandle, file_name: &str, fallback: &'static [u8]) -> TauriImage<'static> {
+    let resolved = app
+        .path()
+        .resolve(format!("icons/{}", file_name), BaseDirectory::Resource);
+    if let Ok(path) = resolved {
+        if let Ok(icon) = TauriImage::from_path(path) {
+            return icon;
+        }
+    }
+
+    TauriImage::from_bytes(fallback).expect("fallback tray icon")
+}
+
 // Helper function to update the tray icon based on mute state
 fn update_tray_icon(app: &AppHandle, is_muted: bool) {
     if let Some(tray) = app.tray_by_id("main-tray") {
         let icon = if is_muted {
-            TauriImage::from_path("icons/tray-muted.png")
+            load_tray_image(app, "tray-muted.png", TRAY_MUTED_BYTES)
         } else {
-            TauriImage::from_path("icons/tray-unmuted.png")
+            load_tray_image(app, "tray-unmuted.png", TRAY_UNMUTED_BYTES)
         };
-        if let Ok(icon) = icon {
-            let _ = tray.set_icon(Some(icon));
-        }
+        let _ = tray.set_icon(Some(icon));
         let tooltip = if is_muted {
             "TogMic - Muted"
         } else {
@@ -348,8 +364,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
     
-    let initial_icon = TauriImage::from_path("icons/tray-unmuted.png")
-        .unwrap_or_else(|_| TauriImage::from_bytes(include_bytes!("../icons/icon.png")).expect("fallback icon"));
+    let initial_icon = load_tray_image(app, "tray-unmuted.png", TRAY_UNMUTED_BYTES);
     
     let _tray = TrayIconBuilder::with_id("main-tray")
         .icon(initial_icon)
