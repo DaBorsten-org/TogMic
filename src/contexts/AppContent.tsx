@@ -1,20 +1,21 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Store } from '@tauri-apps/plugin-store';
+import { useTranslation } from 'react-i18next';
 
 export interface AudioDevice {
   id: string;
   name: string;
-  is_default: boolean;
+  isDefault: boolean;
 }
 
 export interface HotkeyProfile {
   id: string;
   name: string;
-  toggle_key: string;
-  device_ids: string[];
+  toggleKey: string;
+  deviceIds: string[];
+  ignoreModifiers?: boolean;
 }
 
 export interface AppSettings {
@@ -22,6 +23,13 @@ export interface AppSettings {
   autostart: boolean;
   checkUpdates: boolean;
   closeToTray: boolean;
+  startMinimized: boolean;
+}
+
+export interface Config {
+  profiles: HotkeyProfile[];
+  activeProfileId: string | null;
+  appSettings: AppSettings;
 }
 
 interface AppContextType {
@@ -36,6 +44,7 @@ interface AppContextType {
   saveProfile: (profile: HotkeyProfile) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;
   setActiveProfile: (profile: HotkeyProfile) => Promise<void>;
+  deactivateProfile: () => Promise<void>;
   registerHotkey: (hotkey: string) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
 }
@@ -47,43 +56,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<HotkeyProfile[]>([]);
   const [activeProfile, setActiveProfileState] = useState<HotkeyProfile | null>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [store, setStore] = useState<Store | null>(null);
   const [settings, setSettings] = useState<AppSettings>({
-    startMuted: false,
-    autostart: false,
+    startMuted: true,
+    autostart: true,
     checkUpdates: true,
-    closeToTray: false,
+    closeToTray: true,
+    startMinimized: true,
   });
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const startupApplied = useRef(false);
+  const { t, i18n } = useTranslation();
 
-  // Initialize store
+  // Sync tray menu labels whenever language changes
   useEffect(() => {
-    const initStore = async () => {
-      const storeInstance = await Store.load('settings.json');
-      setStore(storeInstance);
-    };
-    initStore();
-  }, []);
+    invoke('update_tray_labels', {
+      mute: t('trayMute'),
+      unmute: t('trayUnmute'),
+      show: t('trayShowWindow'),
+      quit: t('trayQuit'),
+      mutedTooltip: t('trayMutedTooltip'),
+      unmutedTooltip: t('trayUnmutedTooltip'),
+    }).catch(console.error);
+  }, [i18n.language]);
 
-  // Load profiles from store
-  const loadProfiles = async () => {
-    if (!store) return;
-    
+  // Load config from backend
+  const loadConfig = async () => {
     try {
-      const storedProfiles = await store.get<HotkeyProfile[]>('profiles');
-      if (storedProfiles) {
-        setProfiles(storedProfiles);
-      }
+      const config = await invoke<Config>('load_config');
+      setProfiles(config.profiles);
+      setSettings(config.appSettings);
 
       // Auto-load the last active profile
-      const activeProfileId = await store.get<string>('active_profile_id');
-      if (activeProfileId && storedProfiles) {
-        const active = storedProfiles.find((p: HotkeyProfile) => p.id === activeProfileId);
+      if (config.activeProfileId && config.profiles) {
+        const active = config.profiles.find((p) => p.id === config.activeProfileId);
         if (active) {
           await setActiveProfile(active);
         }
       }
+      
+      setConfigLoaded(true);
     } catch (error) {
-      console.error('Failed to load profiles:', error);
+      console.error('Failed to load config:', error);
+      setConfigLoaded(true);
+    }
+  };
+
+  // Save config to backend
+  const saveConfig = async (updatedConfig: Partial<Config>) => {
+    try {
+      const config: Config = {
+        profiles: updatedConfig.profiles ?? profiles,
+        activeProfileId: updatedConfig.activeProfileId !== undefined ? updatedConfig.activeProfileId : activeProfile?.id ?? null,
+        appSettings: updatedConfig.appSettings ?? settings,
+      };
+      await invoke('save_config', { config });
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      throw error;
     }
   };
 
@@ -121,8 +150,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Save profile
   const saveProfile = async (profile: HotkeyProfile) => {
-    if (!store) return;
-    
     try {
       // Validate with backend
       await invoke('save_profile', { profile });
@@ -139,8 +166,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setProfiles(updatedProfiles);
-      await store.set('profiles', updatedProfiles);
-      await store.save();
+      await saveConfig({ profiles: updatedProfiles });
+
+      // If the saved profile is currently active, reactivate it to apply changes
+      if (activeProfile?.id === profile.id) {
+        await setActiveProfile(profile);
+      }
     } catch (error) {
       console.error('Failed to save profile:', error);
       throw error;
@@ -149,19 +180,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Delete profile
   const deleteProfile = async (id: string) => {
-    if (!store) return;
-    
     try {
       const updatedProfiles = profiles.filter((p: HotkeyProfile) => p.id !== id);
       setProfiles(updatedProfiles);
-      await store.set('profiles', updatedProfiles);
-      await store.save();
 
-      // If deleted profile was active, clear active profile
+      // If deleted profile was active, unregister hotkey and clear active profile
       if (activeProfile?.id === id) {
+        // Unregister hotkey first
+        await invoke('unregister_hotkey');
+        
         setActiveProfileState(null);
-        await store.delete('active_profile_id');
-        await store.save();
+        await saveConfig({ 
+          profiles: updatedProfiles,
+          activeProfileId: null 
+        });
+      } else {
+        await saveConfig({ profiles: updatedProfiles });
       }
     } catch (error) {
       console.error('Failed to delete profile:', error);
@@ -171,25 +205,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Set active profile
   const setActiveProfile = async (profile: HotkeyProfile) => {
-    if (!store) return;
-    
     try {
       // Set in backend
       await invoke('set_active_profile', { profile });
       
       // Register hotkey
-      await invoke('register_hotkey', { hotkey: profile.toggle_key });
+      await invoke('register_hotkey', { hotkey: profile.toggleKey, ignoreModifiers: profile.ignoreModifiers ?? false });
       
       // Update local state
       setActiveProfileState(profile);
-      await store.set('active_profile_id', profile.id);
-      await store.save();
+      await saveConfig({ activeProfileId: profile.id });
 
       // Get current mute state
       const muteState = await invoke<boolean>('get_mute_state');
       setIsMuted(muteState);
     } catch (error) {
       console.error('Failed to set active profile:', error);
+      throw error;
+    }
+  };
+
+  // Deactivate current profile
+  const deactivateProfile = async () => {
+    try {
+      // Unregister hotkey
+      await invoke('unregister_hotkey');
+      
+      // Clear active profile
+      setActiveProfileState(null);
+      await saveConfig({ activeProfileId: null });
+    } catch (error) {
+      console.error('Failed to deactivate profile:', error);
       throw error;
     }
   };
@@ -206,13 +252,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Update settings
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
-    if (!store) return;
-    
     try {
       const updatedSettings = { ...settings, ...newSettings };
       setSettings(updatedSettings);
-      await store.set('app_settings', updatedSettings);
-      await store.save();
+      await saveConfig({ appSettings: updatedSettings });
 
       // Apply autostart setting
       if (newSettings.autostart !== undefined) {
@@ -233,34 +276,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Initialize on mount
   useEffect(() => {
-    if (!store) return;
-    
     let mounted = true;
     
     const init = async () => {
-      // Load settings
-      try {
-        const storedSettings = await store.get<AppSettings>('app_settings');
-        if (storedSettings && mounted) {
-          setSettings(storedSettings);
-        }
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
-
       await refreshDevices();
-      await loadProfiles();
-
-      // Apply start muted if enabled and profile is active
-      const storedSettings = await store.get<AppSettings>('app_settings');
-      if (storedSettings?.startMuted && mounted) {
-        await setMute(true, true); // Silent mute on startup
-      }
-
-      // Sync close-to-tray setting with backend
-      if (storedSettings?.closeToTray !== undefined) {
-        await invoke('set_close_to_tray', { enabled: storedSettings.closeToTray });
-      }
+      await loadConfig();
+      
+      setConfigLoaded(true);
     };
     
     init();
@@ -276,7 +298,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mounted = false;
       unlistenMute.then(fn => fn());
     };
-  }, [store]);
+  }, []);
+
+  // Apply startup-only settings once after config is loaded.
+  // This ensures toggling `startMuted` in settings doesn't immediately mute the app;
+  // startMuted should only take effect on the next application start.
+  useEffect(() => {
+    if (configLoaded && !startupApplied.current) {
+      // Apply start muted if enabled (only once at startup)
+      if (settings.startMuted) {
+        setMute(true, true); // Silent mute on startup
+      }
+
+      // Sync close-to-tray setting with backend on startup
+      if (settings.closeToTray !== undefined) {
+        invoke('set_close_to_tray', { enabled: settings.closeToTray });
+      }
+
+      startupApplied.current = true;
+    }
+  }, [configLoaded]);
 
   const value: AppContextType = {
     devices,
@@ -290,6 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveProfile,
     deleteProfile,
     setActiveProfile,
+    deactivateProfile,
     registerHotkey,
     updateSettings,
   };

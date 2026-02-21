@@ -10,3 +10,8 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+
+// Blockiere das Kontextmenü global
+window.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+});

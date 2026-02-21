@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import type { Page } from "@/components/component-example";
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
+import type { Page } from "@/components/app-wrapper";
 
 import {
   Sidebar,
@@ -29,6 +31,11 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({ currentPage, onNavigate, ...props }: AppSidebarProps) {
   const { t } = useTranslation();
+  const [version, setVersion] = useState<string>("");
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
 
   const menuItems = [
     {
@@ -54,11 +61,14 @@ export function AppSidebar({ currentPage, onNavigate, ...props }: AppSidebarProp
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" onClick={() => onNavigate("dashboard")}>
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+              <div className="bg-sidebar-primary text-sidebar-primary-foreground dark:bg-white dark:text-neutral-900 flex aspect-square size-8 items-center justify-center rounded-lg">
                 <MicIcon className="size-4" />
               </div>
               <div className="grid flex-1 text-start text-sm leading-tight">
-                <span className="truncate font-medium">TogMic</span>
+                <span className="truncate font-semibold">TogMic</span>
+                {version && (
+                  <span className="truncate text-xs text-muted-foreground">v{version}</span>
+                )}
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -66,16 +76,17 @@ export function AppSidebar({ currentPage, onNavigate, ...props }: AppSidebarProp
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("navigation")}</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1">
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.page}>
                   <SidebarMenuButton
+                    size="lg"
                     onClick={() => onNavigate(item.page)}
                     isActive={currentPage === item.page}
                   >
-                    <item.icon className="size-4" />
+                    <item.icon className="size-5" />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

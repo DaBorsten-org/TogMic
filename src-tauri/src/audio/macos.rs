@@ -22,9 +22,4 @@ impl AudioController for MacOSAudioController {
         // TODO: Implement CoreAudio mute control
         Err("macOS audio control not yet implemented".to_string())
     }
-    
-    fn get_default_input_device(&self) -> Result<Option<AudioDevice>, String> {
-        // TODO: Implement CoreAudio default device query
-        Err("macOS audio control not yet implemented".to_string())
-    }
 }

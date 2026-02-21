@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { ProfilesPage } from "@/pages/profiles/ProfilesPage";
@@ -9,7 +10,6 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
@@ -17,11 +17,13 @@ import {
 } from "@/components/ui/sidebar";
 import { AppProvider } from "@/contexts/AppContent";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 export type Page = "dashboard" | "profiles" | "settings";
 
-export function ComponentExample() {
+export function AppWrapper() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
+  const { t } = useTranslation();
 
   const renderPage = () => {
     switch (currentPage) {
@@ -39,43 +41,41 @@ export function ComponentExample() {
   const getPageTitle = () => {
     switch (currentPage) {
       case "dashboard":
-        return "Dashboard";
+        return t("dashboard");
       case "profiles":
-        return "Profiles";
+        return t("profiles");
       case "settings":
-        return "Settings";
+        return t("settings");
       default:
-        return "Dashboard";
+        return t("dashboard");
     }
   };
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <Toaster />
       <AppProvider>
         <SidebarProvider>
           <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
           <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b">
-            <div className="flex items-center gap-2 px-4">
-              <SidebarTrigger className="-ml-1" />
-              <Separator
-                orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
-              />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>{getPageTitle()}</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b">
+              <div className="flex items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1" />
+                <div className="mr-2 h-4 w-px bg-border" />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>{getPageTitle()}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
+            </header>
+            <div className="flex flex-1 flex-col gap-6 p-6 pt-8">
+              {renderPage()}
             </div>
-          </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-6">
-            {renderPage()}
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
+          </SidebarInset>
+        </SidebarProvider>
       </AppProvider>
     </ThemeProvider>
   );

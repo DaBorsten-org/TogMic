@@ -1,10 +1,10 @@
-import { ComponentExample } from "@/components/component-example";
+import { AppWrapper } from "@/components/app-wrapper";
 import RootLayout from "./layout";
 
 export function App() {
   return (
     <RootLayout>
-      <ComponentExample />
+      <AppWrapper />
     </RootLayout>
   );
 }

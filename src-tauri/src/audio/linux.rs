@@ -22,9 +22,4 @@ impl AudioController for LinuxAudioController {
         // TODO: Implement PulseAudio mute control
         Err("Linux audio control not yet implemented".to_string())
     }
-    
-    fn get_default_input_device(&self) -> Result<Option<AudioDevice>, String> {
-        // TODO: Implement PulseAudio default device query
-        Err("Linux audio control not yet implemented".to_string())
-    }
 }

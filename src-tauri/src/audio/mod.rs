@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::WindowsAudioController as PlatformAudioController;
+#[cfg(target_os = "windows")]
+pub use windows::clear_endpoint_cache;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -41,6 +43,4 @@ pub trait AudioController {
     fn get_mute_state(&self, device_id: &str) -> Result<bool, String>;
     
     fn set_mute_state(&self, device_id: &str, muted: bool) -> Result<(), String>;
-    
-    fn get_default_input_device(&self) -> Result<Option<AudioDevice>, String>;
 }
