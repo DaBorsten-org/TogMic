@@ -57,7 +57,12 @@ export function ConfirmDialog({
 
         <DialogFooter className="flex gap-2 sm:justify-end">
           {showCancel && (
-            <Button variant="outline" onClick={onCancel} disabled={isLoading}>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              disabled={isLoading}
+              size="lg"
+            >
               {cancelText}
             </Button>
           )}
@@ -65,6 +70,7 @@ export function ConfirmDialog({
             onClick={handleConfirm}
             variant={isDangerous ? "destructive" : "default"}
             disabled={isLoading}
+            size="lg"
           >
             {isLoading ? "..." : confirmText}
           </Button>

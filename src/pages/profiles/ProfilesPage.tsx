@@ -3,7 +3,13 @@ import { ProfileCard } from "./ProfileCard";
 import { ProfileEditor } from "./ProfileEditor";
 import type { HotkeyProfile } from "@/contexts/AppContent";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { RefreshCw, Plus } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,7 +19,9 @@ export function ProfilesPage() {
   const { t } = useTranslation();
   const { profiles, activeProfile, refreshDevices } = useApp();
   const [showEditor, setShowEditor] = useState(false);
-  const [editingProfile, setEditingProfile] = useState<HotkeyProfile | null>(null);
+  const [editingProfile, setEditingProfile] = useState<HotkeyProfile | null>(
+    null,
+  );
 
   const handleNewProfile = () => {
     setEditingProfile(null);
@@ -42,7 +50,7 @@ export function ProfilesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">{t("profiles")}</h1>
+        <h1 className="text-2xl font-bold">{t("profiles")}</h1>
         <p className="text-muted-foreground mt-1">{t("profilesSubtitle")}</p>
       </div>
 
@@ -57,12 +65,13 @@ export function ProfilesPage() {
               <Button
                 onClick={handleRefreshDevices}
                 variant="outline"
+                size="lg"
                 title={t("refreshAudioDevices")}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 {t("refresh")}
               </Button>
-              <Button onClick={handleNewProfile}>
+              <Button onClick={handleNewProfile} size="lg">
                 <Plus className="h-4 w-4 mr-2" />
                 {t("newProfile")}
               </Button>
@@ -77,7 +86,7 @@ export function ProfilesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {profiles.map(profile => (
+              {profiles.map((profile) => (
                 <ProfileCard
                   key={profile.id}
                   profile={profile}

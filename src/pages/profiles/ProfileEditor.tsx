@@ -58,7 +58,9 @@ export function ProfileEditor({
 
     return profile.deviceIds[0];
   });
-  const [ignoreModifiers, setIgnoreModifiers] = useState(profile?.ignoreModifiers ?? false);
+  const [ignoreModifiers, setIgnoreModifiers] = useState(
+    profile?.ignoreModifiers ?? false,
+  );
   const [error, setError] = useState("");
   const [dropdownKey, setDropdownKey] = useState(0);
 
@@ -127,7 +129,7 @@ export function ProfileEditor({
     if (isOpen) {
       await refreshDevices();
       // Force dropdown content to re-render by changing key
-      setDropdownKey(prev => prev + 1);
+      setDropdownKey((prev) => prev + 1);
     }
   };
 
@@ -135,7 +137,9 @@ export function ProfileEditor({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{profile ? t("editProfile") : t("newProfile")}</DialogTitle>
+          <DialogTitle>
+            {profile ? t("editProfile") : t("newProfile")}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -158,8 +162,12 @@ export function ProfileEditor({
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="ignore-modifiers" className="text-sm font-medium">{t("ignoreModifiers")}</Label>
-              <p className="text-xs text-muted-foreground">{t("ignoreModifiersDesc")}</p>
+              <Label htmlFor="ignore-modifiers" className="text-sm font-medium">
+                {t("ignoreModifiers")}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t("ignoreModifiersDesc")}
+              </p>
             </div>
             <Switch
               id="ignore-modifiers"
@@ -177,7 +185,9 @@ export function ProfileEditor({
                   variant="outline"
                   className="w-full justify-between"
                 >
-                  <span className="truncate">{resolveDeviceLabel(selectedDeviceId)}</span>
+                  <span className="truncate">
+                    {resolveDeviceLabel(selectedDeviceId)}
+                  </span>
                   <ChevronDown className="h-4 w-4 opacity-70" />
                 </Button>
               </DropdownMenuTrigger>
@@ -203,7 +213,9 @@ export function ProfileEditor({
                         <span className="flex items-center gap-2">
                           {device.name}
                           {device.isDefault && (
-                            <Badge variant="secondary">{t("defaultDevice")}</Badge>
+                            <Badge variant="secondary">
+                              {t("defaultDevice")}
+                            </Badge>
                           )}
                         </span>
                       </DropdownMenuRadioItem>
@@ -217,10 +229,17 @@ export function ProfileEditor({
           {error && <div className="text-sm text-destructive">{error}</div>}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              size="lg"
+            >
               {t("cancel")}
             </Button>
-            <Button type="submit">{t("saveProfile")}</Button>
+            <Button type="submit" size="lg">
+              {t("saveProfile")}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
