@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
-import { useApp } from "@/contexts/AppContent";
+import { useApp } from "@/contexts/useApp";
 import { useState } from "react";
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';

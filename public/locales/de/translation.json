@@ -98,5 +98,7 @@
   "error": "Fehler",
   "ok": "OK",
   "autostartError": "Autostart-Einstellung konnte nicht geändert werden. Bitte erneut versuchen.",
-  "activateProfileError": "Profil konnte nicht aktiviert werden. Der Hotkey wird möglicherweise bereits verwendet."
+  "activateProfileError": "Profil konnte nicht aktiviert werden. Der Hotkey wird möglicherweise bereits verwendet.",
+  "hotkeyClickToRecord": "Zum Aufnehmen klicken",
+  "hotkeyPressKeys": "Tasten drücken..."
 }

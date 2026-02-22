@@ -1,19 +1,16 @@
 use super::{AudioController, AudioDevice};
-use windows::core::{HSTRING, Interface, ComInterface, GUID};
-use windows::Win32::Media::Audio::*;
-use windows::Win32::System::Com::*;
-use windows::Win32::Foundation::*;
-use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, PROPERTYKEY};
-use windows::Win32::System::Com::StructuredStorage::{
-    PropVariantClear,
-    PropVariantToStringAlloc,
-};
-use std::result::Result as StdResult;
-use std::ptr;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ptr;
+use std::result::Result as StdResult;
+use windows::core::{ComInterface, Interface, GUID, HSTRING};
+use windows::Win32::Foundation::*;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::IMMDeviceEnumerator;
+use windows::Win32::Media::Audio::*;
+use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToStringAlloc};
+use windows::Win32::System::Com::*;
+use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, PROPERTYKEY};
 
 // Per-thread cached enumerator and endpoint interfaces to reduce COM creation overhead.
 thread_local! {
@@ -37,16 +34,20 @@ const PKEY_DEVICE_DESC: PROPERTYKEY = PROPERTYKEY {
 #[repr(C)]
 struct IMMDeviceVtbl {
     // IUnknown methods
-    query_interface: unsafe extern "system" fn(*const std::ffi::c_void, *const GUID, *mut *mut std::ffi::c_void) -> i32,
+    query_interface: unsafe extern "system" fn(
+        *const std::ffi::c_void,
+        *const GUID,
+        *mut *mut std::ffi::c_void,
+    ) -> i32,
     add_ref: unsafe extern "system" fn(*const std::ffi::c_void) -> u32,
     release: unsafe extern "system" fn(*const std::ffi::c_void) -> u32,
     // IMMDevice methods
     activate: unsafe extern "system" fn(
-        *const std::ffi::c_void,  // this
-        *const GUID,              // iid
-        u32,                      // dwClsCtx
-        *const std::ffi::c_void,  // pActivationParams
-        *mut *mut std::ffi::c_void // ppInterface
+        *const std::ffi::c_void,    // this
+        *const GUID,                // iid
+        u32,                        // dwClsCtx
+        *const std::ffi::c_void,    // pActivationParams
+        *mut *mut std::ffi::c_void, // ppInterface
     ) -> i32,
     // ... other methods we don't need
 }
@@ -54,26 +55,29 @@ struct IMMDeviceVtbl {
 unsafe fn activate_audio_endpoint(device: &IMMDevice) -> StdResult<IAudioEndpointVolume, String> {
     let device_ptr = device.as_raw() as *const *const IMMDeviceVtbl;
     let vtbl = *device_ptr;
-    
+
     let iid = &IAudioEndpointVolume::IID;
     let mut ppv: *mut std::ffi::c_void = std::ptr::null_mut();
-    
+
     let hr = ((*vtbl).activate)(
         device.as_raw() as *const std::ffi::c_void,
         iid as *const GUID,
         CLSCTX_ALL.0,
         std::ptr::null(),
-        &mut ppv as *mut *mut std::ffi::c_void
+        &mut ppv as *mut *mut std::ffi::c_void,
     );
-    
+
     if hr < 0 {
-        return Err(format!("IMMDevice::Activate failed with HRESULT: 0x{:08X}", hr));
+        return Err(format!(
+            "IMMDevice::Activate failed with HRESULT: 0x{:08X}",
+            hr
+        ));
     }
-    
+
     if ppv.is_null() {
         return Err("Activate returned null pointer".to_string());
     }
-    
+
     Ok(IAudioEndpointVolume::from_raw(ppv))
 }
 
@@ -87,8 +91,9 @@ unsafe fn thread_enumerator() -> StdResult<IMMDeviceEnumerator, String> {
             return Ok(en.clone());
         }
 
-        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-            .map_err(|e| format!("Failed to create device enumerator: {}", e))?;
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(|e| format!("Failed to create device enumerator: {}", e))?;
 
         *cell.borrow_mut() = Some(enumerator.clone());
         Ok(enumerator)
@@ -106,11 +111,13 @@ unsafe fn get_cached_endpoint_for_id(device_id: &str) -> StdResult<IAudioEndpoin
     let enumerator = thread_enumerator()?;
 
     let device = if device_id == "default-mic" || device_id.is_empty() {
-        enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
+        enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
             .map_err(|e| format!("Failed to get default device: {}", e))?
     } else {
         let id_wide = HSTRING::from(device_id);
-        enumerator.GetDevice(&id_wide)
+        enumerator
+            .GetDevice(&id_wide)
             .map_err(|e| format!("Failed to get device: {}", e))?
     };
 
@@ -118,16 +125,15 @@ unsafe fn get_cached_endpoint_for_id(device_id: &str) -> StdResult<IAudioEndpoin
 
     // Cache the endpoint for subsequent calls on this thread
     THREAD_ENDPOINT_CACHE.with(|cache| {
-        cache.borrow_mut().insert(device_id.to_string(), endpoint.clone());
+        cache
+            .borrow_mut()
+            .insert(device_id.to_string(), endpoint.clone());
     });
 
     Ok(endpoint)
 }
 
-unsafe fn read_device_property(
-    store: &IPropertyStore,
-    key: &PROPERTYKEY,
-) -> Option<String> {
+unsafe fn read_device_property(store: &IPropertyStore, key: &PROPERTYKEY) -> Option<String> {
     let prop = store.GetValue(key).ok()?;
 
     let value = match PropVariantToStringAlloc(&prop) {
@@ -169,10 +175,12 @@ impl AudioController for WindowsAudioController {
         unsafe {
             let enumerator = thread_enumerator()?;
 
-            let collection = enumerator.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)
+            let collection = enumerator
+                .EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)
                 .map_err(|e| format!("Failed to enumerate devices: {}", e))?;
 
-            let count = collection.GetCount()
+            let count = collection
+                .GetCount()
                 .map_err(|e| format!("Failed to get device count: {}", e))?;
 
             let default_device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole).ok();
@@ -189,10 +197,12 @@ impl AudioController for WindowsAudioController {
             let mut devices = Vec::new();
 
             for i in 0..count {
-                let device = collection.Item(i)
+                let device = collection
+                    .Item(i)
                     .map_err(|e| format!("Failed to get device {}: {}", i, e))?;
 
-                let id_pwstr = device.GetId()
+                let id_pwstr = device
+                    .GetId()
                     .map_err(|e| format!("Failed to get device ID: {}", e))?;
                 let id = id_pwstr.to_string().unwrap_or_default();
                 CoTaskMemFree(Some(id_pwstr.0 as *const _));
@@ -216,45 +226,33 @@ impl AudioController for WindowsAudioController {
 
     fn get_mute_state(&self, device_id: &str) -> StdResult<bool, String> {
         unsafe {
-            // Use per-thread cached endpoint when possible
             let endpoint = get_cached_endpoint_for_id(device_id)?;
-            let muted = endpoint.GetMute()
-                .map_err(|e| format!("Failed to get mute state: {}", e))?;
-            Ok(muted.as_bool())
+            match endpoint.GetMute() {
+                Ok(muted) => Ok(muted.as_bool()),
+                Err(e) => {
+                    // Remove stale cache entry so the next call tries a fresh endpoint
+                    THREAD_ENDPOINT_CACHE.with(|cache| {
+                        cache.borrow_mut().remove(device_id);
+                    });
+                    Err(format!("Device unavailable: {}", e))
+                }
+            }
         }
     }
 
     fn set_mute_state(&self, device_id: &str, muted: bool) -> StdResult<(), String> {
-        // Try to use cached endpoint to avoid recreating COM objects; fall back on direct activation if needed
         unsafe {
-            let endpoint_res = get_cached_endpoint_for_id(device_id);
-
-            let endpoint = match endpoint_res {
-                Ok(ep) => ep,
-                Err(_) => {
-                    // Last resort: create enumerator and activate
-                    let enumerator = thread_enumerator()?;
-                    let device = if device_id == "default-mic" || device_id.is_empty() {
-                        enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
-                            .map_err(|e| format!("Failed to get default device: {}", e))?
-                    } else {
-                        let id_wide = HSTRING::from(device_id);
-                        enumerator.GetDevice(&id_wide)
-                            .map_err(|e| format!("Failed to get device: {}", e))?
-                    };
-                    activate_audio_endpoint(&device)?
+            let endpoint = get_cached_endpoint_for_id(device_id)?;
+            match endpoint.SetMute(BOOL::from(muted), ptr::null()) {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    // Remove stale cache entry so the next call tries a fresh endpoint
+                    THREAD_ENDPOINT_CACHE.with(|cache| {
+                        cache.borrow_mut().remove(device_id);
+                    });
+                    Err(format!("Device unavailable: {}", e))
                 }
-            };
-
-            endpoint.SetMute(BOOL::from(muted), ptr::null())
-                .map_err(|e| format!("Failed to set mute state: {}", e))?;
-
-            // Update cache entry in case endpoint pointer changed
-            THREAD_ENDPOINT_CACHE.with(|cache| {
-                cache.borrow_mut().insert(device_id.to_string(), endpoint.clone());
-            });
-
-            Ok(())
+            }
         }
     }
 }
@@ -266,7 +264,4 @@ pub fn clear_endpoint_cache() {
     });
 }
 
-
 // IMMNotificationClient support was removed due to dependency version conflicts.
-
-

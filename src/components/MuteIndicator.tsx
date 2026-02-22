@@ -1,4 +1,4 @@
-import { useApp } from '@/contexts/AppContent';
+import { useApp } from '@/contexts/useApp';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff } from 'lucide-react';

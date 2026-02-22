@@ -1,4 +1,4 @@
-import { useApp } from "@/contexts/AppContent";
+import { useApp } from "@/contexts/useApp";
 import { MuteIndicator } from "@/components/MuteIndicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

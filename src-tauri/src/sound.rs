@@ -13,7 +13,7 @@ fn load_external_sound(filename: &str) -> Option<Vec<u8>> {
     let exe_path = std::env::current_exe().ok()?;
     let exe_dir = exe_path.parent()?;
     let sound_path = exe_dir.join(filename);
-    
+
     // Try to read the file
     fs::read(sound_path).ok()
 }
@@ -21,10 +21,8 @@ fn load_external_sound(filename: &str) -> Option<Vec<u8>> {
 /// Play a WAV buffer using the native Windows PlaySound API (async, no resampling)
 #[cfg(target_os = "windows")]
 fn play_wav_static(data: &'static [u8]) {
-    use windows::Win32::Media::Audio::{
-        PlaySoundA, SND_ASYNC, SND_MEMORY, SND_NODEFAULT,
-    };
     use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::Media::Audio::{PlaySoundA, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
 
     unsafe {
         // SND_MEMORY: data points to in-memory WAV
@@ -41,15 +39,13 @@ fn play_wav_static(data: &'static [u8]) {
 /// Play a WAV buffer from a Vec using the native Windows PlaySound API
 #[cfg(target_os = "windows")]
 fn play_wav_dynamic(data: Vec<u8>) {
-    use windows::Win32::Media::Audio::{
-        PlaySoundA, SND_ASYNC, SND_MEMORY, SND_NODEFAULT,
-    };
     use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::Media::Audio::{PlaySoundA, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
 
     // We need to leak the data to ensure it's valid for the async playback
     // This is acceptable for infrequent sound playback
     let data_ptr = Box::leak(data.into_boxed_slice());
-    
+
     unsafe {
         let _ = PlaySoundA(
             windows::core::PCSTR(data_ptr.as_ptr()),

@@ -1,5 +1,5 @@
-import { useApp } from "@/contexts/AppContent";
-import type { HotkeyProfile } from "@/contexts/AppContent";
+import { useApp } from "@/contexts/useApp";
+import type { HotkeyProfile } from "@/contexts/AppContext";
 import {
   Card,
   CardHeader,

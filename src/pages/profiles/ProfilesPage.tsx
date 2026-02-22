@@ -1,7 +1,7 @@
-import { useApp } from "@/contexts/AppContent";
+import { useApp } from "@/contexts/useApp";
 import { ProfileCard } from "./ProfileCard";
 import { ProfileEditor } from "./ProfileEditor";
-import type { HotkeyProfile } from "@/contexts/AppContent";
+import type { HotkeyProfile } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -100,6 +100,7 @@ export function ProfilesPage() {
       </Card>
 
       <ProfileEditor
+        key={showEditor ? (editingProfile?.id ?? "new") : "closed"}
         profile={editingProfile}
         onSave={handleCloseEditor}
         onCancel={handleCloseEditor}

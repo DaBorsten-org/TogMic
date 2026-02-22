@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun install:*)",
+      "Bash(bunx eslint:*)",
+      "Bash(bun add:*)",
+      "Bash(cargo check:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

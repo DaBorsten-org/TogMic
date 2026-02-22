@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { useApp } from "@/contexts/AppContent";
-import type { HotkeyProfile } from "@/contexts/AppContent";
+import { useState } from "react";
+import { useApp } from "@/contexts/useApp";
+import type { HotkeyProfile } from "@/contexts/AppContext";
 import { HotkeyInput } from "@/components/HotkeyInput";
 import {
   Dialog,
@@ -64,25 +64,6 @@ export function ProfileEditor({
   const [error, setError] = useState("");
   const [dropdownKey, setDropdownKey] = useState(0);
 
-  // Reset form fields when dialog opens or profile changes
-  useEffect(() => {
-    if (open) {
-      setName(profile?.name || "");
-      setToggleKey(profile?.toggleKey || "");
-      setIgnoreModifiers(profile?.ignoreModifiers ?? false);
-
-      if (!profile?.deviceIds || profile.deviceIds.length === 0) {
-        setSelectedDeviceId(defaultDeviceId);
-      } else if (profile.deviceIds.length > 1) {
-        setSelectedDeviceId(allDevicesId);
-      } else {
-        setSelectedDeviceId(profile.deviceIds[0]);
-      }
-
-      setError("");
-    }
-  }, [open, profile]);
-
   const resolveDeviceLabel = (deviceId: string) => {
     if (deviceId === defaultDeviceId) return t("defaultDevice");
     if (deviceId === allDevicesId) return t("allDevices");
@@ -135,7 +116,7 @@ export function ProfileEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>
             {profile ? t("editProfile") : t("newProfile")}

@@ -98,5 +98,7 @@
   "error": "Error",
   "ok": "OK",
   "autostartError": "Failed to update autostart setting. Please try again.",
-  "activateProfileError": "Failed to activate profile. The hotkey might already be in use."
+  "activateProfileError": "Failed to activate profile. The hotkey might already be in use.",
+  "hotkeyClickToRecord": "Click to record hotkey",
+  "hotkeyPressKeys": "Press keys..."
 }

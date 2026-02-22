@@ -3,17 +3,22 @@ mod sound;
 
 use audio::{AudioController, AudioDevice, PlatformAudioController};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 // note: mpsc/debounce not used yet
+use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, Manager, State, menu::{MenuBuilder, MenuItemBuilder}, path::BaseDirectory};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use std::str::FromStr;
-use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 use tauri::image::Image as TauriImage;
-use once_cell::sync::Lazy;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    path::BaseDirectory,
+    AppHandle, Emitter, Manager, State,
+};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_notification::NotificationExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -170,14 +175,25 @@ fn get_profile_mute_state(
         Ok(fallback)
     }
 }
-fn apply_mute_async(device_ids: Vec<String>, muted: bool) {
+fn apply_mute_async(app: AppHandle, device_ids: Vec<String>, muted: bool) {
     std::thread::spawn(move || {
         // Initialize audio subsystem for this thread (e.g., COM on Windows)
         let _ = PlatformAudioController::init_thread();
 
         if let Ok(controller) = PlatformAudioController::new() {
-            for device_id in device_ids {
-                let _ = controller.set_mute_state(&device_id, muted);
+            let mut any_failed = false;
+            for device_id in &device_ids {
+                if controller.set_mute_state(device_id, muted).is_err() {
+                    any_failed = true;
+                }
+            }
+            if any_failed {
+                let _ = app
+                    .notification()
+                    .builder()
+                    .title("TogMic")
+                    .body("A microphone is no longer connected and could not be muted/unmuted.")
+                    .show();
             }
         }
     });
@@ -188,14 +204,14 @@ fn apply_mute_async(device_ids: Vec<String>, muted: bool) {
 #[tauri::command]
 fn get_audio_devices(state: State<AppState>) -> Result<Vec<AudioDevice>, String> {
     let controller_lock = state.audio_controller.lock().unwrap();
-    
+
     if let Some(controller) = controller_lock.as_ref() {
         let devices = controller.enumerate_input_devices()?;
-        
+
         // Update cached devices
         let mut devices_lock = state.devices.lock().unwrap();
         *devices_lock = devices.clone();
-        
+
         Ok(devices)
     } else {
         Err("Audio controller not initialized".to_string())
@@ -206,7 +222,7 @@ fn get_audio_devices(state: State<AppState>) -> Result<Vec<AudioDevice>, String>
 fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
     let controller_lock = state.audio_controller.lock().unwrap();
     let profile_lock = state.current_profile.lock().unwrap();
-    
+
     if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
         // Fast path: toggle based on cached state so UI/tray update is immediate
         let cached = state.is_muted.load(Ordering::SeqCst);
@@ -230,8 +246,8 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
         // Update tray icon immediately
         update_tray_icon(&app, new_state);
 
-        // Apply system mute changes in background
-        apply_mute_async(device_ids, new_state);
+        // Apply system mute changes in background; shows a notification if a device is unavailable
+        apply_mute_async(app.clone(), device_ids, new_state);
 
         Ok(new_state)
     } else {
@@ -240,19 +256,24 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn set_mute(muted: bool, silent: Option<bool>, state: State<AppState>, app: AppHandle) -> Result<(), String> {
+fn set_mute(
+    muted: bool,
+    silent: Option<bool>,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
     let controller_lock = state.audio_controller.lock().unwrap();
     let profile_lock = state.current_profile.lock().unwrap();
-    
+
     if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
         let device_ids = resolve_device_ids(controller, profile)?;
         // Apply mute state to all devices in profile
         for device_id in device_ids {
             controller.set_mute_state(&device_id, muted)?;
         }
-        
+
         state.is_muted.store(muted, Ordering::SeqCst);
-        
+
         // Play sound feedback only if not silent
         if !silent.unwrap_or(false) {
             if muted {
@@ -261,13 +282,13 @@ fn set_mute(muted: bool, silent: Option<bool>, state: State<AppState>, app: AppH
                 sound::play_unmute_sound();
             }
         }
-        
+
         // Emit event to frontend
         let _ = app.emit("mute-state-changed", muted);
-        
+
         // Update tray icon
         update_tray_icon(&app, muted);
-        
+
         Ok(())
     } else {
         Err("No active profile or audio controller not initialized".to_string())
@@ -279,7 +300,7 @@ fn get_mute_state(state: State<AppState>) -> Result<bool, String> {
     // Read actual mute state from the system instead of using cached value
     let controller_lock = state.audio_controller.lock().unwrap();
     let profile_lock = state.current_profile.lock().unwrap();
-    
+
     if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
         let cached = state.is_muted.load(Ordering::SeqCst);
         if let Ok(system_muted) = get_profile_mute_state(controller, profile, cached) {
@@ -287,7 +308,7 @@ fn get_mute_state(state: State<AppState>) -> Result<bool, String> {
             return Ok(system_muted);
         }
     }
-    
+
     Ok(state.is_muted.load(Ordering::SeqCst))
 }
 
@@ -297,22 +318,26 @@ fn save_profile(profile: HotkeyProfile) -> Result<(), String> {
     if profile.name.is_empty() {
         return Err("Profile name cannot be empty".to_string());
     }
-    
+
     if profile.toggle_key.is_empty() {
         return Err("Hotkey cannot be empty".to_string());
     }
-    
+
     if profile.device_ids.is_empty() {
         return Err("At least one device must be selected".to_string());
     }
-    
+
     // Note: Actual saving to config will be done from frontend using save_config command
     // This command just validates the profile
     Ok(())
 }
 
 #[tauri::command]
-fn set_active_profile(profile: HotkeyProfile, state: State<AppState>, app: AppHandle) -> Result<(), String> {
+fn set_active_profile(
+    profile: HotkeyProfile,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
     // Set the new active profile
     {
         let mut profile_lock = state.current_profile.lock().unwrap();
@@ -340,7 +365,12 @@ fn get_active_profile(state: State<AppState>) -> Result<Option<HotkeyProfile>, S
 }
 
 #[tauri::command]
-fn register_hotkey(hotkey: String, ignore_modifiers: Option<bool>, app: AppHandle, state: State<AppState>) -> Result<(), String> {
+fn register_hotkey(
+    hotkey: String,
+    ignore_modifiers: Option<bool>,
+    app: AppHandle,
+    state: State<AppState>,
+) -> Result<(), String> {
     // Unregister all existing shortcuts first
     let _ = app.global_shortcut().unregister_all();
 
@@ -357,7 +387,10 @@ fn register_hotkey(hotkey: String, ignore_modifiers: Option<bool>, app: AppHandl
             "Alt+Shift+",
             "CommandOrControl+Alt+Shift+",
         ];
-        prefixes.iter().map(|p| format!("{}{}", p, hotkey)).collect()
+        prefixes
+            .iter()
+            .map(|p| format!("{}{}", p, hotkey))
+            .collect()
     } else {
         vec![hotkey.clone()]
     };
@@ -394,12 +427,15 @@ fn register_hotkey(hotkey: String, ignore_modifiers: Option<bool>, app: AppHandl
                 let controller_lock = audio_controller.lock().unwrap();
                 let profile_lock = current_profile.lock().unwrap();
 
-                if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
+                if let (Some(controller), Some(profile)) =
+                    (controller_lock.as_ref(), profile_lock.as_ref())
+                {
                     // Fast path: toggle based on cached state and apply changes asynchronously
                     let old = is_muted.load(Ordering::SeqCst);
                     let new_state = !old;
 
-                    let device_ids = resolve_device_ids(controller, profile).unwrap_or_else(|_| profile.device_ids.clone());
+                    let device_ids = resolve_device_ids(controller, profile)
+                        .unwrap_or_else(|_| profile.device_ids.clone());
 
                     is_muted.store(new_state, Ordering::SeqCst);
 
@@ -414,8 +450,8 @@ fn register_hotkey(hotkey: String, ignore_modifiers: Option<bool>, app: AppHandl
                     let _ = app.emit("mute-state-changed", new_state);
                     update_tray_icon(app, new_state);
 
-                    // Apply system mute in background
-                    apply_mute_async(device_ids, new_state);
+                    // Apply system mute in background; shows a notification if a device is unavailable
+                    apply_mute_async(app.clone(), device_ids, new_state);
                 }
             })
             .map_err(|e| format!("Failed to register hotkey '{}': {}", hotkey_str, e))?;
@@ -437,7 +473,7 @@ fn unregister_hotkey(app: AppHandle, state: State<AppState>) -> Result<(), Strin
 #[tauri::command]
 async fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
     let autostart_manager = app.state::<tauri_plugin_autostart::AutoLaunchManager>();
-    
+
     if enabled {
         autostart_manager
             .enable()
@@ -447,7 +483,7 @@ async fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
             .disable()
             .map_err(|e| format!("Failed to disable autostart: {}", e))?;
     }
-    
+
     Ok(())
 }
 
@@ -488,7 +524,11 @@ fn update_tray_labels(
     rebuild_tray_menu(&app, is_muted);
 
     if let Some(tray) = app.tray_by_id("main-tray") {
-        let tooltip = if is_muted { &muted_tooltip } else { &unmuted_tooltip };
+        let tooltip = if is_muted {
+            &muted_tooltip
+        } else {
+            &unmuted_tooltip
+        };
         let _ = tray.set_tooltip(Some(tooltip.as_str()));
     }
 
@@ -499,7 +539,8 @@ fn update_tray_labels(
 
 fn get_config_path(app: &AppHandle) -> Result<PathBuf, String> {
     // Prefer the per-user AppConfig directory so the config survives dev rebuilds
-    let config_dir = app.path()
+    let config_dir = app
+        .path()
         .resolve(".", BaseDirectory::AppConfig)
         .map_err(|e| format!("Failed to resolve config directory: {}", e))?;
 
@@ -513,14 +554,14 @@ fn get_config_path(app: &AppHandle) -> Result<PathBuf, String> {
 #[tauri::command]
 fn load_config(app: AppHandle) -> Result<Config, String> {
     let config_path = get_config_path(&app)?;
-    
+
     if config_path.exists() {
         let content = fs::read_to_string(&config_path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
-        
+
         let config: Config = serde_json::from_str(&content)
             .map_err(|e| format!("Failed to parse config file: {}", e))?;
-        
+
         Ok(config)
     } else {
         // Return default config if file doesn't exist
@@ -531,17 +572,20 @@ fn load_config(app: AppHandle) -> Result<Config, String> {
 #[tauri::command]
 fn save_config(config: Config, app: AppHandle) -> Result<(), String> {
     let config_path = get_config_path(&app)?;
-    
+
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
-    
-    fs::write(&config_path, json)
-        .map_err(|e| format!("Failed to write config file: {}", e))?;
-    
+
+    fs::write(&config_path, json).map_err(|e| format!("Failed to write config file: {}", e))?;
+
     Ok(())
 }
 
-fn load_tray_image(app: &AppHandle, file_name: &str, fallback: &'static [u8]) -> TauriImage<'static> {
+fn load_tray_image(
+    app: &AppHandle,
+    file_name: &str,
+    fallback: &'static [u8],
+) -> TauriImage<'static> {
     // Fast-path for bundled icons: return pre-decoded cached images to avoid path resolution and decoding overhead
     if file_name.ends_with("tray-muted.png") {
         return LAZY_TRAY_MUTED.clone();
@@ -625,38 +669,35 @@ fn update_tray_icon(app: &AppHandle, is_muted: bool) {
     rebuild_tray_menu(app, is_muted);
 }
 
-// Helper function for hotkey callback
+// Helper function for tray/click toggle — uses fast path to avoid blocking COM calls under lock
 fn toggle_mute_internal(state: &AppState, app: &AppHandle) -> Result<bool, String> {
     let controller_lock = state.audio_controller.lock().unwrap();
     let profile_lock = state.current_profile.lock().unwrap();
-    
-    if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
-        // Read actual mute state from system to stay in sync
-        let cached = state.is_muted.load(Ordering::SeqCst);
-        let actual_muted = get_profile_mute_state(controller, profile, cached)?;
-        let new_state = !actual_muted;
 
-        let device_ids = resolve_device_ids(controller, profile)?;
-        // Apply mute state to all devices in profile
-        for device_id in device_ids {
-            let _ = controller.set_mute_state(&device_id, new_state);
-        }
-        
+    if let (Some(controller), Some(profile)) = (controller_lock.as_ref(), profile_lock.as_ref()) {
+        // Fast path: flip cached state immediately so the UI/tray responds without delay.
+        // The actual COM call runs in a background thread to avoid blocking under the lock,
+        // which would freeze the app if the device is disconnected and COM hangs.
+        let old = state.is_muted.load(Ordering::SeqCst);
+        let new_state = !old;
+
+        let device_ids =
+            resolve_device_ids(controller, profile).unwrap_or_else(|_| profile.device_ids.clone());
+
         state.is_muted.store(new_state, Ordering::SeqCst);
-        
-        // Play sound feedback
+
         if new_state {
             sound::play_mute_sound();
         } else {
             sound::play_unmute_sound();
         }
-        
-        // Emit event to frontend
+
         let _ = app.emit("mute-state-changed", new_state);
-        
-        // Update tray icon
         update_tray_icon(app, new_state);
-        
+
+        // Apply system mute in background; shows a notification if a device is unavailable
+        apply_mute_async(app.clone(), device_ids, new_state);
+
         Ok(new_state)
     } else {
         Err("No active profile or audio controller not initialized".to_string())
@@ -667,38 +708,36 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let toggle_item = MenuItemBuilder::with_id("toggle", "Toggle Mute").build(app)?;
     let show_item = MenuItemBuilder::with_id("show", "Show Window").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-    
+
     let menu = MenuBuilder::new(app)
         .item(&toggle_item)
         .separator()
         .item(&show_item)
         .item(&quit_item)
         .build()?;
-    
+
     let initial_icon = load_tray_image(app, "tray-unmuted.png", TRAY_UNMUTED_BYTES);
-    
+
     let _tray = TrayIconBuilder::with_id("main-tray")
         .icon(initial_icon)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("TogMic - Unmuted")
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "toggle" => {
-                    let state = app.state::<AppState>();
-                    let _ = toggle_mute_internal(&state, app);
-                }
-                "show" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "toggle" => {
+                let state = app.state::<AppState>();
+                let _ = toggle_mute_internal(&state, app);
             }
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -713,7 +752,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .build(app)?;
-    
+
     // Ensure tray icon reflects the current mute state at startup
     let state = app.state::<AppState>();
     let current = state.is_muted.load(Ordering::SeqCst);
@@ -732,13 +771,14 @@ pub fn run() {
             None
         }
     };
-    
+
     let app_state = AppState {
         audio_controller: Arc::new(Mutex::new(audio_controller)),
         ..Default::default()
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -778,14 +818,15 @@ pub fn run() {
         })
         .setup(|app| {
             setup_tray(app.handle())?;
-            
+
             // Initialize persistent audio playback thread
             sound::init();
-            
+
             // Try to load saved config and set active profile on startup so tray matches
             if let Ok(cfg) = load_config(app.handle().clone()) {
                 if let Some(active_id) = cfg.active_profile_id.clone() {
-                    if let Some(profile) = cfg.profiles.iter().find(|p| p.id == active_id).cloned() {
+                    if let Some(profile) = cfg.profiles.iter().find(|p| p.id == active_id).cloned()
+                    {
                         // Set active profile and sync state/tray
                         {
                             let state = app.state::<AppState>();
@@ -794,7 +835,9 @@ pub fn run() {
                             let controller_lock = state.audio_controller.lock().unwrap();
                             if let Some(controller) = controller_lock.as_ref() {
                                 let cached = state.is_muted.load(Ordering::SeqCst);
-                                if let Ok(system_muted) = get_profile_mute_state(controller, &profile, cached) {
+                                if let Ok(system_muted) =
+                                    get_profile_mute_state(controller, &profile, cached)
+                                {
                                     state.is_muted.store(system_muted, Ordering::SeqCst);
                                     let _ = app.handle().emit("mute-state-changed", system_muted);
                                     update_tray_icon(&app.handle(), system_muted);
@@ -812,13 +855,13 @@ pub fn run() {
                     }
                 }
             }
-            
+
             // Start background polling thread to sync mute state with system
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 // Initialize audio subsystem for this thread (e.g., COM on Windows)
                 let _ = PlatformAudioController::init_thread();
-                
+
                 let poll_controller = match PlatformAudioController::new() {
                     Ok(c) => c,
                     Err(e) => {
@@ -826,13 +869,13 @@ pub fn run() {
                         return;
                     }
                 };
-                
+
                 let mut prev_device_ids: Option<Vec<String>> = None;
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(500));
-                    
+
                     let state = app_handle.state::<AppState>();
-                    
+
                     let profile = {
                         let profile_lock = state.current_profile.lock().unwrap();
                         profile_lock.as_ref().cloned()
@@ -854,7 +897,9 @@ pub fn run() {
 
                         let cached = state.is_muted.load(Ordering::SeqCst);
 
-                        if let Ok(system_muted) = get_profile_mute_state(&poll_controller, &profile, cached) {
+                        if let Ok(system_muted) =
+                            get_profile_mute_state(&poll_controller, &profile, cached)
+                        {
                             let prev = state.is_muted.load(Ordering::SeqCst);
                             if prev != system_muted {
                                 state.is_muted.store(system_muted, Ordering::SeqCst);
@@ -869,7 +914,7 @@ pub fn run() {
                     }
                 }
             });
-            
+
             Ok(())
         })
         .run(tauri::generate_context!())

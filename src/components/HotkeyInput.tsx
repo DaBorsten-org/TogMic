@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface HotkeyInputProps {
   value: string;
@@ -14,6 +15,7 @@ export function HotkeyInput({
   onChange,
   placeholder,
 }: HotkeyInputProps) {
+  const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const [displayValue, setDisplayValue] = useState(value);
 
@@ -36,7 +38,7 @@ export function HotkeyInput({
 
     // Add the main key if it's not a modifier
     if (!["Control", "Shift", "Alt", "Meta"].includes(e.key)) {
-      let key = e.key;
+      const key = e.key;
 
       // Handle F keys (F1-F24) - try e.key first, fall back to e.code
       const fKeyMatch = key.match(/^F([1-9]|1[0-9]|2[0-4])$/);
@@ -74,7 +76,7 @@ export function HotkeyInput({
 
   const handleFocus = () => {
     setIsRecording(true);
-    setDisplayValue("Press keys...");
+    setDisplayValue(t("hotkeyPressKeys"));
   };
 
   const handleBlur = () => {
@@ -89,7 +91,7 @@ export function HotkeyInput({
       onFocus={handleFocus}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      placeholder={placeholder || "Click to record hotkey"}
+      placeholder={placeholder || t("hotkeyClickToRecord")}
       readOnly
       className={cn(
         "font-mono cursor-pointer",
