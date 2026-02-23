@@ -479,9 +479,14 @@ async fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
             .enable()
             .map_err(|e| format!("Failed to enable autostart: {}", e))?;
     } else {
-        autostart_manager
-            .disable()
-            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+        if let Err(e) = autostart_manager.disable() {
+            // If disable fails, check if the entry already doesn't exist (desired state)
+            let still_enabled = autostart_manager.is_enabled().unwrap_or(false);
+            if still_enabled {
+                return Err(format!("Failed to disable autostart: {}", e));
+            }
+            // Already disabled - desired state achieved, no error
+        }
     }
 
     Ok(())
@@ -846,6 +851,18 @@ pub fn run() {
                         }
                     }
                 }
+                // Sync OS autostart entry with config (e.g. if registry entry was missing
+                // despite config saying autostart=true, or needs to be removed)
+                {
+                    let autostart_manager =
+                        app.state::<tauri_plugin_autostart::AutoLaunchManager>();
+                    if cfg.app_settings.autostart {
+                        let _ = autostart_manager.enable();
+                    } else {
+                        let _ = autostart_manager.disable();
+                    }
+                }
+
                 // tauri.conf.json now creates the main window hidden by default to avoid a flash.
                 // Show the window only if the user did NOT enable start_minimized.
                 if !cfg.app_settings.start_minimized {
