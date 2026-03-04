@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import {
   AppContext,
@@ -331,7 +334,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error,
       );
     }
-  }, [configLoaded, settings.startMuted, settings.closeToTray]);
+
+    // Auto-check for updates on startup if enabled
+    if (settings.checkUpdates) {
+      check()
+        .then(async (update) => {
+          if (update) {
+            toast(t("updateAvailable", { version: update.version }), {
+              duration: Infinity,
+              action: {
+                label: t("update"),
+                onClick: async () => {
+                  await update.downloadAndInstall();
+                  await relaunch();
+                },
+              },
+            });
+          }
+        })
+        .catch(console.error);
+    }
+  }, [configLoaded, settings.startMuted, settings.closeToTray, settings.checkUpdates, t]);
 
   const value: AppContextType = {
     devices,
