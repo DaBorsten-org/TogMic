@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { load, type Store } from "@tauri-apps/plugin-store";
 import { useTranslation } from "react-i18next";
 import {
   AppContext,
@@ -28,7 +29,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [configLoaded, setConfigLoaded] = useState(false);
   const startupApplied = useRef(false);
+  const storeRef = useRef<Store | null>(null);
   const { t, i18n } = useTranslation();
+
+  const getStore = async () => {
+    if (!storeRef.current) {
+      storeRef.current = await load("config.json", {
+        autoSave: false,
+        defaults: {}
+      });
+    }
+    return storeRef.current;
+  };
 
   // Sync tray menu labels whenever language changes
   useEffect(() => {
@@ -42,20 +54,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }).catch(console.error);
   }, [i18n.language, t]);
 
-  // Load config from backend
-  const loadConfig = async () => {
+  // Load config from store
+  const loadConfig = useCallback(async () => {
     try {
-      const config = await invoke<Config>("load_config");
-      setProfiles(config.profiles);
-      setSettings(config.appSettings);
+      const store = await getStore();
+      const loadedProfiles =
+        (await store.get<HotkeyProfile[]>("profiles")) ?? [];
+      const loadedActiveProfileId =
+        (await store.get<string | null>("activeProfileId")) ?? null;
+      const loadedSettings = (await store.get<AppSettings>("appSettings")) ?? {
+        startMuted: true,
+        autostart: true,
+        checkUpdates: true,
+        closeToTray: true,
+        startMinimized: true,
+      };
+
+      setProfiles(loadedProfiles);
+      setSettings(loadedSettings);
 
       // Auto-load the last active profile.
       // We intentionally do NOT call setActiveProfile() here because that function
       // calls saveConfig(), which would read stale React state (profiles = []) and
       // overwrite the config file with an empty profiles array.
-      if (config.activeProfileId && config.profiles) {
-        const active = config.profiles.find(
-          (p) => p.id === config.activeProfileId,
+      if (loadedActiveProfileId) {
+        const active = loadedProfiles.find(
+          (p) => p.id === loadedActiveProfileId,
         );
         if (active) {
           await invoke("set_active_profile", { profile: active });
@@ -74,20 +98,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Failed to load config:", error);
       setConfigLoaded(true);
     }
-  };
+  }, []);
 
-  // Save config to backend
+  // Save config to store
   const saveConfig = async (updatedConfig: Partial<Config>) => {
     try {
-      const config: Config = {
-        profiles: updatedConfig.profiles ?? profiles,
-        activeProfileId:
-          updatedConfig.activeProfileId !== undefined
-            ? updatedConfig.activeProfileId
-            : (activeProfile?.id ?? null),
-        appSettings: updatedConfig.appSettings ?? settings,
-      };
-      await invoke("save_config", { config });
+      const store = await getStore();
+      await store.set("profiles", updatedConfig.profiles ?? profiles);
+      await store.set(
+        "activeProfileId",
+        updatedConfig.activeProfileId !== undefined
+          ? updatedConfig.activeProfileId
+          : (activeProfile?.id ?? null),
+      );
+      await store.set("appSettings", updatedConfig.appSettings ?? settings);
+      await store.save();
     } catch (error) {
       console.error("Failed to save config:", error);
       throw error;
@@ -283,7 +308,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mounted = false;
       unlistenMute.then((fn) => fn());
     };
-  }, []);
+  }, [loadConfig]);
 
   // Apply startup-only settings once after config is loaded.
   // This ensures toggling `startMuted` in settings doesn't immediately mute the app;
@@ -327,4 +352,3 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
-

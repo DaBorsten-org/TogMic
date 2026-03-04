@@ -7,8 +7,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 // note: mpsc/debounce not used yet
 use once_cell::sync::Lazy;
-use std::fs;
-use std::path::PathBuf;
 use std::str::FromStr;
 use tauri::image::Image as TauriImage;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -19,6 +17,7 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_store::StoreExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,27 +57,6 @@ impl Default for AppSettings {
             check_updates: true,
             close_to_tray: true,
             start_minimized: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Config {
-    #[serde(default)]
-    pub profiles: Vec<HotkeyProfile>,
-    #[serde(default)]
-    pub active_profile_id: Option<String>,
-    #[serde(default)]
-    pub app_settings: AppSettings,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            profiles: Vec::new(),
-            active_profile_id: None,
-            app_settings: AppSettings::default(),
         }
     }
 }
@@ -327,8 +305,7 @@ fn save_profile(profile: HotkeyProfile) -> Result<(), String> {
         return Err("At least one device must be selected".to_string());
     }
 
-    // Note: Actual saving to config will be done from frontend using save_config command
-    // This command just validates the profile
+    // Note: This command just validates the profile; saving is done by the frontend via the store
     Ok(())
 }
 
@@ -540,52 +517,6 @@ fn update_tray_labels(
     Ok(())
 }
 
-// Config file handling
-
-fn get_config_path(app: &AppHandle) -> Result<PathBuf, String> {
-    // Prefer the per-user AppConfig directory so the config survives dev rebuilds
-    let config_dir = app
-        .path()
-        .resolve(".", BaseDirectory::AppConfig)
-        .map_err(|e| format!("Failed to resolve config directory: {}", e))?;
-
-    // Ensure the config directory exists
-    fs::create_dir_all(&config_dir)
-        .map_err(|e| format!("Failed to create config directory: {}", e))?;
-
-    Ok(config_dir.join("config.json"))
-}
-
-#[tauri::command]
-fn load_config(app: AppHandle) -> Result<Config, String> {
-    let config_path = get_config_path(&app)?;
-
-    if config_path.exists() {
-        let content = fs::read_to_string(&config_path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
-
-        let config: Config = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse config file: {}", e))?;
-
-        Ok(config)
-    } else {
-        // Return default config if file doesn't exist
-        Ok(Config::default())
-    }
-}
-
-#[tauri::command]
-fn save_config(config: Config, app: AppHandle) -> Result<(), String> {
-    let config_path = get_config_path(&app)?;
-
-    let json = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-    fs::write(&config_path, json).map_err(|e| format!("Failed to write config file: {}", e))?;
-
-    Ok(())
-}
-
 fn load_tray_image(
     app: &AppHandle,
     file_name: &str,
@@ -792,6 +723,7 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             get_audio_devices,
@@ -807,8 +739,6 @@ pub fn run() {
             get_autostart_status,
             set_close_to_tray,
             update_tray_labels,
-            load_config,
-            save_config,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -827,36 +757,47 @@ pub fn run() {
             // Initialize persistent audio playback thread
             sound::init();
 
-            // Try to load saved config and set active profile on startup so tray matches
-            if let Ok(cfg) = load_config(app.handle().clone()) {
-                if let Some(active_id) = cfg.active_profile_id.clone() {
-                    if let Some(profile) = cfg.profiles.iter().find(|p| p.id == active_id).cloned()
-                    {
+            // Load saved config from store and set active profile on startup so tray matches
+            {
+                let store = app.store("config.json")?;
+                let profiles: Vec<HotkeyProfile> = store
+                    .get("profiles")
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default();
+                let active_profile_id: Option<String> = store
+                    .get("activeProfileId")
+                    .and_then(|v| serde_json::from_value(v).ok());
+                let app_settings: AppSettings = store
+                    .get("appSettings")
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default();
+
+                if let Some(active_id) = active_profile_id {
+                    if let Some(profile) = profiles.iter().find(|p| p.id == active_id).cloned() {
                         // Set active profile and sync state/tray
-                        {
-                            let state = app.state::<AppState>();
-                            let mut profile_lock = state.current_profile.lock().unwrap();
-                            *profile_lock = Some(profile.clone());
-                            let controller_lock = state.audio_controller.lock().unwrap();
-                            if let Some(controller) = controller_lock.as_ref() {
-                                let cached = state.is_muted.load(Ordering::SeqCst);
-                                if let Ok(system_muted) =
-                                    get_profile_mute_state(controller, &profile, cached)
-                                {
-                                    state.is_muted.store(system_muted, Ordering::SeqCst);
-                                    let _ = app.handle().emit("mute-state-changed", system_muted);
-                                    update_tray_icon(&app.handle(), system_muted);
-                                }
+                        let state = app.state::<AppState>();
+                        let mut profile_lock = state.current_profile.lock().unwrap();
+                        *profile_lock = Some(profile.clone());
+                        let controller_lock = state.audio_controller.lock().unwrap();
+                        if let Some(controller) = controller_lock.as_ref() {
+                            let cached = state.is_muted.load(Ordering::SeqCst);
+                            if let Ok(system_muted) =
+                                get_profile_mute_state(controller, &profile, cached)
+                            {
+                                state.is_muted.store(system_muted, Ordering::SeqCst);
+                                let _ = app.handle().emit("mute-state-changed", system_muted);
+                                update_tray_icon(&app.handle(), system_muted);
                             }
                         }
                     }
                 }
+
                 // Sync OS autostart entry with config (e.g. if registry entry was missing
                 // despite config saying autostart=true, or needs to be removed)
                 {
                     let autostart_manager =
                         app.state::<tauri_plugin_autostart::AutoLaunchManager>();
-                    if cfg.app_settings.autostart {
+                    if app_settings.autostart {
                         let _ = autostart_manager.enable();
                     } else {
                         let _ = autostart_manager.disable();
@@ -865,7 +806,7 @@ pub fn run() {
 
                 // tauri.conf.json now creates the main window hidden by default to avoid a flash.
                 // Show the window only if the user did NOT enable start_minimized.
-                if !cfg.app_settings.start_minimized {
+                if !app_settings.start_minimized {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.set_focus();
