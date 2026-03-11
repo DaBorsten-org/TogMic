@@ -12,7 +12,6 @@ use tauri::image::Image as TauriImage;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    path::BaseDirectory,
     AppHandle, Emitter, Manager, State,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
@@ -69,6 +68,7 @@ pub struct AppState {
     pub close_to_tray: Arc<Mutex<bool>>,
     // Cache last visible tray state to avoid redundant tray API calls
     pub last_tray_muted: Arc<Mutex<Option<bool>>>,
+    pub last_tray_dark_mode: Arc<Mutex<Option<bool>>>,
     // Localized tray tooltip strings
     pub tray_tooltip_muted: Arc<Mutex<String>>,
     pub tray_tooltip_unmuted: Arc<Mutex<String>>,
@@ -88,6 +88,7 @@ impl Default for AppState {
             audio_controller: Arc::new(Mutex::new(None)),
             close_to_tray: Arc::new(Mutex::new(true)),
             last_tray_muted: Arc::new(Mutex::new(None)),
+            last_tray_dark_mode: Arc::new(Mutex::new(None)),
             tray_tooltip_muted: Arc::new(Mutex::new("TogMic - Muted".to_string())),
             tray_tooltip_unmuted: Arc::new(Mutex::new("TogMic - Unmuted".to_string())),
             tray_label_mute: Arc::new(Mutex::new("Mute".to_string())),
@@ -100,17 +101,130 @@ impl Default for AppState {
 
 const ALL_DEVICES_ID: &str = "all-mics";
 
-const TRAY_MUTED_BYTES: &[u8] = include_bytes!("../icons/tray-muted.png");
-const TRAY_UNMUTED_BYTES: &[u8] = include_bytes!("../icons/tray-unmuted.png");
+const TRAY_MUTED_DARK_BYTES: &[u8] = include_bytes!("../icons/tray-muted-dark.png");
+const TRAY_MUTED_LIGHT_BYTES: &[u8] = include_bytes!("../icons/tray-muted-light.png");
+const TRAY_UNMUTED_DARK_BYTES: &[u8] = include_bytes!("../icons/tray-unmuted-dark.png");
+const TRAY_UNMUTED_LIGHT_BYTES: &[u8] = include_bytes!("../icons/tray-unmuted-light.png");
 
 // Lazy cached TauriImage instances created from embedded bytes to avoid repeated IO/decoding
-static LAZY_TRAY_MUTED: Lazy<TauriImage<'static>> = Lazy::new(|| {
-    TauriImage::from_bytes(TRAY_MUTED_BYTES).expect("failed to create muted tray image")
+static LAZY_TRAY_MUTED_DARK: Lazy<TauriImage<'static>> = Lazy::new(|| {
+    TauriImage::from_bytes(TRAY_MUTED_DARK_BYTES).expect("failed to create muted-dark tray image")
 });
 
-static LAZY_TRAY_UNMUTED: Lazy<TauriImage<'static>> = Lazy::new(|| {
-    TauriImage::from_bytes(TRAY_UNMUTED_BYTES).expect("failed to create unmuted tray image")
+static LAZY_TRAY_MUTED_LIGHT: Lazy<TauriImage<'static>> = Lazy::new(|| {
+    TauriImage::from_bytes(TRAY_MUTED_LIGHT_BYTES).expect("failed to create muted-light tray image")
 });
+
+static LAZY_TRAY_UNMUTED_DARK: Lazy<TauriImage<'static>> = Lazy::new(|| {
+    TauriImage::from_bytes(TRAY_UNMUTED_DARK_BYTES)
+        .expect("failed to create unmuted-dark tray image")
+});
+
+static LAZY_TRAY_UNMUTED_LIGHT: Lazy<TauriImage<'static>> = Lazy::new(|| {
+    TauriImage::from_bytes(TRAY_UNMUTED_LIGHT_BYTES)
+        .expect("failed to create unmuted-light tray image")
+});
+
+/// Returns true if Windows is currently in dark mode (SystemUsesLightTheme == 0).
+/// Defaults to dark mode on non-Windows or if the registry key cannot be read.
+fn is_system_dark_mode() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::core::PCWSTR;
+        use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+
+        let subkey: Vec<u16> =
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
+                .encode_utf16()
+                .collect();
+        let value_name: Vec<u16> = "SystemUsesLightTheme\0".encode_utf16().collect();
+
+        let mut data: u32 = 0;
+        let mut data_size: u32 = std::mem::size_of::<u32>() as u32;
+
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                PCWSTR(subkey.as_ptr()),
+                PCWSTR(value_name.as_ptr()),
+                RRF_RT_REG_DWORD,
+                None,
+                Some(&mut data as *mut u32 as *mut std::ffi::c_void),
+                Some(&mut data_size),
+            )
+        };
+
+        if result.is_ok() {
+            data == 0 // 0 = dark mode, 1 = light mode
+        } else {
+            true // default to dark mode if registry key not readable
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        true // default to dark mode on non-Windows
+    }
+}
+
+fn get_tray_icon(is_muted: bool) -> TauriImage<'static> {
+    let dark = is_system_dark_mode();
+    match (is_muted, dark) {
+        (true, true) => LAZY_TRAY_MUTED_DARK.clone(),
+        (true, false) => LAZY_TRAY_MUTED_LIGHT.clone(),
+        (false, true) => LAZY_TRAY_UNMUTED_DARK.clone(),
+        (false, false) => LAZY_TRAY_UNMUTED_LIGHT.clone(),
+    }
+}
+
+/// Spawns a background thread that blocks on `RegNotifyChangeKeyValue` for the
+/// Windows personalization registry key. When the key changes (dark/light mode
+/// toggle), the thread wakes up immediately and updates the tray icon, then
+/// re-registers for the next notification. Zero CPU usage between changes.
+#[cfg(target_os = "windows")]
+fn start_theme_change_listener(app: AppHandle) {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegNotifyChangeKeyValue, RegOpenKeyExW, KEY_NOTIFY, REG_NOTIFY_CHANGE_LAST_SET,
+    };
+
+    std::thread::spawn(move || unsafe {
+        let subkey: Vec<u16> =
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
+                .encode_utf16()
+                .collect();
+
+        let mut hkey = windows::Win32::System::Registry::HKEY::default();
+        let result = RegOpenKeyExW(
+            windows::Win32::System::Registry::HKEY_CURRENT_USER,
+            PCWSTR(subkey.as_ptr()),
+            0,
+            KEY_NOTIFY,
+            &mut hkey,
+        );
+
+        if result.is_err() {
+            return;
+        }
+
+        loop {
+            // Block this thread until any value in the key changes — no CPU usage while waiting
+            let result =
+                RegNotifyChangeKeyValue(hkey, false, REG_NOTIFY_CHANGE_LAST_SET, None, false);
+
+            if result.is_err() {
+                break;
+            }
+
+            // Registry key changed: invalidate cached theme and refresh tray icon
+            let state = app.state::<AppState>();
+            *state.last_tray_dark_mode.lock().unwrap() = None;
+            let is_muted = state.is_muted.load(Ordering::SeqCst);
+            update_tray_icon(&app, is_muted);
+        }
+
+        let _ = RegCloseKey(hkey);
+    });
+}
 
 fn profile_uses_all_devices(profile: &HotkeyProfile) -> bool {
     profile.device_ids.len() > 1 || profile.device_ids.iter().any(|id| id == ALL_DEVICES_ID)
@@ -517,33 +631,6 @@ fn update_tray_labels(
     Ok(())
 }
 
-fn load_tray_image(
-    app: &AppHandle,
-    file_name: &str,
-    fallback: &'static [u8],
-) -> TauriImage<'static> {
-    // Fast-path for bundled icons: return pre-decoded cached images to avoid path resolution and decoding overhead
-    if file_name.ends_with("tray-muted.png") {
-        return LAZY_TRAY_MUTED.clone();
-    }
-
-    if file_name.ends_with("tray-unmuted.png") {
-        return LAZY_TRAY_UNMUTED.clone();
-    }
-
-    // Fallback: try loading from resource path, otherwise decode bytes
-    let resolved = app
-        .path()
-        .resolve(format!("icons/{}", file_name), BaseDirectory::Resource);
-    if let Ok(path) = resolved {
-        if let Ok(icon) = TauriImage::from_path(path) {
-            return icon;
-        }
-    }
-
-    TauriImage::from_bytes(fallback).expect("fallback tray icon")
-}
-
 fn rebuild_tray_menu(app: &AppHandle, is_muted: bool) {
     let state = app.state::<AppState>();
     let toggle_label = if is_muted {
@@ -577,19 +664,18 @@ fn rebuild_tray_menu(app: &AppHandle, is_muted: bool) {
 fn update_tray_icon(app: &AppHandle, is_muted: bool) {
     // Avoid redundant tray updates by comparing with cached visible state
     let state = app.state::<AppState>();
-    let mut last_lock = state.last_tray_muted.lock().unwrap();
-    if let Some(prev) = *last_lock {
-        if prev == is_muted {
-            return; // nothing to update
-        }
+    let dark_mode = is_system_dark_mode();
+    let mut last_muted_lock = state.last_tray_muted.lock().unwrap();
+    let mut last_dark_lock = state.last_tray_dark_mode.lock().unwrap();
+
+    let mute_unchanged = last_muted_lock.map_or(false, |prev| prev == is_muted);
+    let theme_unchanged = last_dark_lock.map_or(false, |prev| prev == dark_mode);
+    if mute_unchanged && theme_unchanged {
+        return; // nothing to update
     }
 
     if let Some(tray) = app.tray_by_id("main-tray") {
-        let icon = if is_muted {
-            load_tray_image(app, "tray-muted.png", TRAY_MUTED_BYTES)
-        } else {
-            load_tray_image(app, "tray-unmuted.png", TRAY_UNMUTED_BYTES)
-        };
+        let icon = get_tray_icon(is_muted);
         let _ = tray.set_icon(Some(icon));
         let tooltip = if is_muted {
             state.tray_tooltip_muted.lock().unwrap().clone()
@@ -599,8 +685,10 @@ fn update_tray_icon(app: &AppHandle, is_muted: bool) {
         let _ = tray.set_tooltip(Some(tooltip.as_str()));
     }
 
-    *last_lock = Some(is_muted);
-    drop(last_lock);
+    *last_muted_lock = Some(is_muted);
+    *last_dark_lock = Some(dark_mode);
+    drop(last_muted_lock);
+    drop(last_dark_lock);
 
     rebuild_tray_menu(app, is_muted);
 }
@@ -652,7 +740,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
-    let initial_icon = load_tray_image(app, "tray-unmuted.png", TRAY_UNMUTED_BYTES);
+    let initial_icon = get_tray_icon(false);
 
     let _tray = TrayIconBuilder::with_id("main-tray")
         .icon(initial_icon)
@@ -814,6 +902,10 @@ pub fn run() {
                 }
             }
 
+            // Listen for Windows dark/light mode changes via registry key notification
+            #[cfg(target_os = "windows")]
+            start_theme_change_listener(app.handle().clone());
+
             // Start background polling thread to sync mute state with system
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -861,11 +953,7 @@ pub fn run() {
                             let prev = state.is_muted.load(Ordering::SeqCst);
                             if prev != system_muted {
                                 state.is_muted.store(system_muted, Ordering::SeqCst);
-
-                                // Emit event to frontend
                                 let _ = app_handle.emit("mute-state-changed", system_muted);
-
-                                // Update tray icon
                                 update_tray_icon(&app_handle, system_muted);
                             }
                         }

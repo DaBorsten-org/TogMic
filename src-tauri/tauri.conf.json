@@ -27,8 +27,10 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "icons/tray-muted.png",
-      "icons/tray-unmuted.png"
+      "icons/tray-muted-dark.png",
+      "icons/tray-muted-light.png",
+      "icons/tray-unmuted-dark.png",
+      "icons/tray-unmuted-light.png"
     ],
     "icon": [
       "icons/32x32.png",
