@@ -18,6 +18,7 @@ import {
 import { AppProvider } from "@/contexts/AppContent";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export type Page = "dashboard" | "profiles" | "settings";
 
@@ -55,9 +56,9 @@ export function AppWrapper() {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <Toaster />
       <AppProvider>
-        <SidebarProvider>
+        <SidebarProvider className="h-svh">
           <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
-          <SidebarInset>
+          <SidebarInset className="overflow-hidden flex flex-col">
             <header className="flex h-16 shrink-0 items-center gap-2 border-b">
               <div className="flex items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
@@ -71,9 +72,11 @@ export function AppWrapper() {
                 </Breadcrumb>
               </div>
             </header>
-            <div className="flex flex-1 flex-col gap-6 p-6 pt-8">
-              {renderPage()}
-            </div>
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="p-6 pt-8">
+                {renderPage()}
+              </div>
+            </ScrollArea>
           </SidebarInset>
         </SidebarProvider>
       </AppProvider>

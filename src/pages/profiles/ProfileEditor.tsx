@@ -63,6 +63,7 @@ export function ProfileEditor({
   );
   const [error, setError] = useState("");
   const [dropdownKey, setDropdownKey] = useState(0);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const resolveDeviceLabel = (deviceId: string) => {
     if (deviceId === defaultDeviceId) return t("defaultDevice");
@@ -107,11 +108,16 @@ export function ProfileEditor({
   };
 
   const handleDropdownOpenChange = async (isOpen: boolean) => {
+    setDropdownOpen(isOpen);
     if (isOpen) {
       await refreshDevices();
-      // Force dropdown content to re-render by changing key
       setDropdownKey((prev) => prev + 1);
     }
+  };
+
+  const handleDeviceSelect = (value: string) => {
+    setSelectedDeviceId(value);
+    setDropdownOpen(false);
   };
 
   return (
@@ -159,23 +165,18 @@ export function ProfileEditor({
 
           <div className="space-y-2">
             <Label>{t("devices")}</Label>
-            <DropdownMenu onOpenChange={handleDropdownOpenChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-between"
-                >
-                  <span className="truncate">
-                    {resolveDeviceLabel(selectedDeviceId)}
-                  </span>
-                  <ChevronDown className="h-4 w-4 opacity-70" />
-                </Button>
+            <div className="relative">
+            <DropdownMenu open={dropdownOpen} onOpenChange={handleDropdownOpenChange}>
+              <DropdownMenuTrigger render={<Button type="button" variant="outline" className="w-full justify-between" />}>
+                <span className="truncate">
+                  {resolveDeviceLabel(selectedDeviceId)}
+                </span>
+                <ChevronDown className="h-4 w-4 opacity-70" />
               </DropdownMenuTrigger>
               <DropdownMenuContent key={dropdownKey} className="max-h-64">
                 <DropdownMenuRadioGroup
                   value={selectedDeviceId}
-                  onValueChange={setSelectedDeviceId}
+                  onValueChange={handleDeviceSelect}
                 >
                   <DropdownMenuRadioItem value={defaultDeviceId}>
                     {t("defaultDevice")}
@@ -205,6 +206,7 @@ export function ProfileEditor({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
 
           {error && <div className="text-sm text-destructive">{error}</div>}
