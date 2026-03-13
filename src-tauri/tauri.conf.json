@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TogMic",
-  "version": "0.1.8",
   "identifier": "com.daborsten.togmic",
   "build": {
     "beforeDevCommand": "bun run dev",
