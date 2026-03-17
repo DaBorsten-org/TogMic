@@ -10,20 +10,23 @@
          class) apply immediately when the stylesheet loads. -->
     <meta name="theme-color" content="#171717" />
     <script>
-      (function() {
+      (function () {
         try {
-          var stored = localStorage.getItem('theme');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var stored = localStorage.getItem("theme");
+          var prefersDark =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
           var isDark = false;
-          if (stored === 'dark') isDark = true;
-          else if (stored === 'light') isDark = false;
+          if (stored === "dark") isDark = true;
+          else if (stored === "light") isDark = false;
           else isDark = prefersDark;
 
-          if (isDark) document.documentElement.classList.add('dark');
+          if (isDark) document.documentElement.classList.add("dark");
 
           // update theme-color meta for the current theme
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', isDark ? '#171717' : '#ffffff');
+          if (meta)
+            meta.setAttribute("content", isDark ? "#171717" : "#ffffff");
         } catch (e) {
           /* ignore */
         }
@@ -31,18 +34,30 @@
     </script>
     <style>
       /* Ensure app root fills screen during initial paint */
-      html, body, #root { height: 100%; }
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
       /* Default (light) and dark backgrounds to avoid a white flash */
       @media (prefers-color-scheme: dark) {
-        body { background: #171717; color-scheme: dark; }
+        body {
+          background: #171717;
+          color-scheme: dark;
+        }
       }
       @media (prefers-color-scheme: light) {
-        body { background: #ffffff; color-scheme: light; }
+        body {
+          background: #ffffff;
+          color-scheme: light;
+        }
       }
       /* Fallback if no prefers-color-scheme support */
-      body { background: #171717; }
+      body {
+        background: #171717;
+      }
     </style>
-    <title>Tauri + React + Typescript</title>
+    <title>TogMic</title>
   </head>
 
   <body>
