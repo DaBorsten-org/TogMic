@@ -660,6 +660,79 @@ fn rebuild_tray_menu(app: &AppHandle, is_muted: bool) {
     }
 }
 
+/// Trims the working set of a process and all its descendants so Windows can page out
+/// WebView2 memory while TogMic is in the tray. Each WebView2 subprocess (Manager, GPU,
+/// Network Service, Storage Service) runs in its own OS process, so we must trim all of them.
+#[cfg(target_os = "windows")]
+fn trim_process_memory() {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows::Win32::System::Memory::{SetProcessWorkingSetSizeEx, QUOTA_LIMITS_HARDWS_MIN_DISABLE};
+    use windows::Win32::System::Threading::{
+        GetCurrentProcess, GetCurrentProcessId, OpenProcess, PROCESS_SET_QUOTA,
+    };
+
+    unsafe {
+        // Trim our own process first
+        let _ = SetProcessWorkingSetSizeEx(
+            GetCurrentProcess(),
+            usize::MAX,
+            usize::MAX,
+            QUOTA_LIMITS_HARDWS_MIN_DISABLE,
+        );
+
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return;
+        };
+
+        // Collect all PIDs and their parent PIDs
+        let mut all_procs: Vec<(u32, u32)> = Vec::new();
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                all_procs.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+
+        // BFS: find all descendants of our process
+        let root_pid = GetCurrentProcessId();
+        let mut to_trim: Vec<u32> = vec![root_pid];
+        let mut i = 0;
+        while i < to_trim.len() {
+            let parent = to_trim[i];
+            for &(pid, ppid) in &all_procs {
+                if ppid == parent && pid != root_pid && !to_trim.contains(&pid) {
+                    to_trim.push(pid);
+                }
+            }
+            i += 1;
+        }
+
+        // Trim every descendant process
+        for pid in to_trim.into_iter().skip(1) {
+            if let Ok(handle) = OpenProcess(PROCESS_SET_QUOTA, false, pid) {
+                let _ = SetProcessWorkingSetSizeEx(
+                    handle,
+                    usize::MAX,
+                    usize::MAX,
+                    QUOTA_LIMITS_HARDWS_MIN_DISABLE,
+                );
+                let _ = CloseHandle(handle);
+            }
+        }
+    }
+}
+
 // Helper function to update the tray icon based on mute state
 fn update_tray_icon(app: &AppHandle, is_muted: bool) {
     // Avoid redundant tray updates by comparing with cached visible state
@@ -836,6 +909,8 @@ pub fn run() {
                 if *close_to_tray {
                     api.prevent_close();
                     let _ = window.hide();
+                    #[cfg(target_os = "windows")]
+                    trim_process_memory();
                 }
             }
         })
@@ -899,6 +974,14 @@ pub fn run() {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
+                } else {
+                    // Window stays hidden in tray — trim WebView2 memory after it finishes
+                    // initializing (WebView2 spawns its subprocesses asynchronously).
+                    #[cfg(target_os = "windows")]
+                    std::thread::spawn(|| {
+                        std::thread::sleep(std::time::Duration::from_secs(5));
+                        trim_process_memory();
+                    });
                 }
             }
 

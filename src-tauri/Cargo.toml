@@ -1,6 +1,6 @@
 [package]
 name = "TogMic"
-version = "0.1.9"
+version = "0.2.0"
 description = "TogMic is an application to toggle the state of your microphone"
 authors = ["you"]
 edition = "2021"
@@ -46,6 +46,8 @@ windows = { version = "0.52", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_System_Threading",
     "Win32_System_Registry",
+    "Win32_System_Memory",
+    "Win32_System_Diagnostics_ToolHelp",
     "implement",
 ] }
 # Add windows-implement matching windows v0.52 so the `implement` macro is available
