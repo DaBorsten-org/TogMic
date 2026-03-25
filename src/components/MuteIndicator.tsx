@@ -10,7 +10,6 @@ export function MuteIndicator() {
   const disabled = !activeProfile;
 
   const handleClick = () => {
-    console.log('MuteIndicator button clicked');
     toggleMute();
   };
 

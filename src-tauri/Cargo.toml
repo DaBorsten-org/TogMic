@@ -1,6 +1,6 @@
 [package]
 name = "TogMic"
-version = "0.2.0"
+version = "0.2.1"
 description = "TogMic is an application to toggle the state of your microphone"
 authors = ["you"]
 edition = "2021"
