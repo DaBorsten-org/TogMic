@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { useApp } from "@/contexts/useApp";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,15 +81,31 @@ function ThemePreview({ value }: { value: "light" | "dark" | "system" }) {
   );
 }
 
-export function SettingsPage() {
+export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, triggerInstallDialog, onInstallDialogTriggered }: { initialTab?: string; availableUpdate?: { version: string; body?: string; date?: string }; onUpdateFound?: (update: { version: string; body?: string; date?: string }) => void; triggerInstallDialog?: boolean; onInstallDialogTriggered?: () => void }) {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
   const { settings, updateSettings } = useApp();
+  const [activeTab, setActiveTab] = useState(initialTab ?? "appearance");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string>("");
+
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<{ version: string; body: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const updateInfo = availableUpdate
+    ? { version: availableUpdate.version, body: availableUpdate.body ?? t("noReleaseNotes"), date: availableUpdate.date }
+    : null;
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (triggerInstallDialog && updateInfo) {
+      setShowUpdateDialog(true);
+      onInstallDialogTriggered?.();
+    }
+  }, [triggerInstallDialog, updateInfo, onInstallDialogTriggered]);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -145,11 +161,11 @@ export function SettingsPage() {
 
       if (update) {
         setUpdateStatus(t("updateAvailable", { version: update.version }));
-        setUpdateInfo({
+        onUpdateFound?.({
           version: update.version,
-          body: update.body || t("noReleaseNotes"),
+          body: update.body || undefined,
+          date: update.date ?? undefined,
         });
-        setShowUpdateDialog(true);
       } else {
         setUpdateStatus(t("upToDate"));
       }
@@ -185,7 +201,7 @@ export function SettingsPage() {
         <p className="text-muted-foreground mt-1">{t("settingsSubtitle")}</p>
       </div>
 
-      <Tabs defaultValue="appearance">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full">
           <TabsTrigger value="appearance" className="flex-1">{t("appearance")}</TabsTrigger>
           <TabsTrigger value="behavior" className="flex-1">{t("behavior")}</TabsTrigger>
@@ -300,7 +316,7 @@ export function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="updates" className="mt-6">
+        <TabsContent value="updates" className="mt-6 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>{t("updates")}</CardTitle>
@@ -321,6 +337,33 @@ export function SettingsPage() {
               )}
             </CardContent>
           </Card>
+
+          {updateInfo && (
+            <Card className="border-primary/40">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base">{t("updateAvailable", { version: updateInfo.version })}</CardTitle>
+                    <CardDescription className="mt-1">
+                      {updateInfo.date
+                        ? new Date(updateInfo.date).toLocaleString(i18n.language, { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                        : t("releaseNotes")}
+                    </CardDescription>
+                  </div>
+                  <Button size="sm" onClick={() => setShowUpdateDialog(true)} className="shrink-0">
+                    <Download className="h-4 w-4 mr-2" />
+                    {t("update")}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs font-medium text-muted-foreground uppercase mb-2">{t("releaseNotes")}</p>
+                <div className="max-h-52 overflow-y-auto rounded-md border border-muted bg-muted/50 p-3 text-sm whitespace-pre-wrap">
+                  {updateInfo.body}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -338,16 +381,12 @@ export function SettingsPage() {
         <ConfirmDialog
           open={showUpdateDialog}
           title={t("updateToVersion", { version: updateInfo.version })}
-          description={t("releaseNotes")}
+          description={t("updateConfirmDesc")}
           confirmText={t("update")}
           cancelText={t("cancel")}
           onConfirm={handleConfirmUpdate}
           onCancel={() => setShowUpdateDialog(false)}
-        >
-          <div className="max-h-48 overflow-y-auto rounded-md border border-muted bg-muted/50 p-4 text-sm whitespace-pre-wrap">
-            {updateInfo.body}
-          </div>
-        </ConfirmDialog>
+        />
       )}
     </div>
   );

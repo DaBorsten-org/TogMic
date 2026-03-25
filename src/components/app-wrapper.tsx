@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
@@ -24,7 +24,16 @@ export type Page = "dashboard" | "profiles" | "settings";
 
 export function AppWrapper() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
+  const [settingsInitialTab, setSettingsInitialTab] = useState<string | undefined>(undefined);
+  const [availableUpdate, setAvailableUpdate] = useState<{ version: string; body?: string; date?: string } | undefined>(undefined);
+  const [triggerInstallDialog, setTriggerInstallDialog] = useState(false);
   const { t } = useTranslation();
+
+  const handleNavigateToUpdates = useCallback((version: string, body?: string, date?: string) => {
+    setCurrentPage("settings");
+    setSettingsInitialTab("updates");
+    setAvailableUpdate({ version, body, date });
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -33,7 +42,7 @@ export function AppWrapper() {
       case "profiles":
         return <ProfilesPage />;
       case "settings":
-        return <SettingsPage />;
+        return <SettingsPage initialTab={settingsInitialTab} availableUpdate={availableUpdate} onUpdateFound={setAvailableUpdate} triggerInstallDialog={triggerInstallDialog} onInstallDialogTriggered={() => setTriggerInstallDialog(false)} />;
       default:
         return <DashboardPage />;
     }
@@ -55,7 +64,7 @@ export function AppWrapper() {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <Toaster />
-      <AppProvider>
+      <AppProvider onNavigateToUpdates={handleNavigateToUpdates} onRequestInstall={() => { setCurrentPage("settings"); setSettingsInitialTab("updates"); setTriggerInstallDialog(true); }}>
         <SidebarProvider className="h-svh">
           <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
           <SidebarInset className="overflow-hidden flex flex-col">

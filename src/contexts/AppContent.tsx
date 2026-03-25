@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { check } from "@tauri-apps/plugin-updater";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -16,7 +17,7 @@ import {
   type AppContextType,
 } from "@/contexts/AppContext";
 
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }: { children: ReactNode; onNavigateToUpdates?: (version: string, body?: string, date?: string) => void; onRequestInstall?: () => void }) {
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [profiles, setProfiles] = useState<HotkeyProfile[]>([]);
   const [activeProfile, setActiveProfileState] = useState<HotkeyProfile | null>(
@@ -33,6 +34,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [configLoaded, setConfigLoaded] = useState(false);
   const startupApplied = useRef(false);
   const storeRef = useRef<Store | null>(null);
+  const pendingUpdateRef = useRef<Update | null>(null);
+  const onNavigateToUpdatesRef = useRef(onNavigateToUpdates);
+  onNavigateToUpdatesRef.current = onNavigateToUpdates;
+  const onRequestInstallRef = useRef(onRequestInstall);
+  onRequestInstallRef.current = onRequestInstall;
   const { t, i18n } = useTranslation();
 
   const getStore = async () => {
@@ -307,11 +313,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // When window gains focus after a background notification, navigate to updates and show toast
+    const win = getCurrentWindow();
+    const unlistenFocus = win.listen("tauri://focus", () => {
+      if (!mounted) return;
+      const update = pendingUpdateRef.current;
+      if (!update) return;
+      pendingUpdateRef.current = null;
+      onNavigateToUpdatesRef.current?.(update.version, update.body, update.date ?? undefined);
+      toast(t("updateAvailable", { version: update.version }), {
+        duration: Infinity,
+        action: {
+          label: t("update"),
+          onClick: () => {
+            onRequestInstallRef.current?.();
+          },
+        },
+      });
+    });
+
     return () => {
       mounted = false;
       unlistenMute.then((fn) => fn());
+      unlistenFocus.then((fn) => fn());
     };
-  }, [loadConfig]);
+  }, [loadConfig, t]);
 
   // Apply startup-only settings once after config is loaded.
   // This ensures toggling `startMuted` in settings doesn't immediately mute the app;
@@ -340,16 +366,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       check()
         .then(async (update) => {
           if (update) {
-            toast(t("updateAvailable", { version: update.version }), {
-              duration: Infinity,
-              action: {
-                label: t("update"),
-                onClick: async () => {
-                  await update.downloadAndInstall();
-                  await relaunch();
+            const win = getCurrentWindow();
+            const isVisible = await win.isVisible();
+            if (!isVisible) {
+              pendingUpdateRef.current = update;
+              invoke("show_update_notification", {
+                title: t("updateAvailable", { version: update.version }),
+                body: t("updateNotificationBody"),
+              }).catch(console.error);
+            } else {
+              toast(t("updateAvailable", { version: update.version }), {
+                duration: Infinity,
+                action: {
+                  label: t("update"),
+                  onClick: async () => {
+                    await update.downloadAndInstall();
+                    await relaunch();
+                  },
                 },
-              },
-            });
+              });
+            }
           }
         })
         .catch(console.error);
