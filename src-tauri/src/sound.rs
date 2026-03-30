@@ -1,8 +1,13 @@
 use std::fs;
 use std::io::Cursor;
 use std::sync::mpsc;
+use std::time::Duration;
 use once_cell::sync::OnceCell;
 use rodio::cpal::traits::{DeviceTrait, HostTrait};
+
+// Release audio stream after this many seconds of silence so Bluetooth devices
+// can go idle and other audio sources (e.g. phone music) can take over.
+const STREAM_IDLE_TIMEOUT_SECS: u64 = 5;
 
 /// Embedded WAV files
 const MUTE_WAV: &[u8] = include_bytes!("../resources/mute.wav");
@@ -28,32 +33,45 @@ pub fn init() {
         let mut stream_state: Option<StreamState> = None;
         let mut current_sink: Option<rodio::Sink> = None;
 
-        while let Ok(data) = rx.recv() {
-            let current_device = default_device_name().unwrap_or_default();
+        loop {
+            match rx.recv_timeout(Duration::from_secs(STREAM_IDLE_TIMEOUT_SECS)) {
+                Ok(data) => {
+                    let current_device = default_device_name().unwrap_or_default();
 
-            // Reinitialize stream only if device changed or not yet initialized
-            let needs_reinit = stream_state.as_ref()
-                .map(|(_, _, name)| name != &current_device)
-                .unwrap_or(true);
+                    // Reinitialize stream only if device changed or not yet initialized
+                    let needs_reinit = stream_state.as_ref()
+                        .map(|(_, _, name)| name != &current_device)
+                        .unwrap_or(true);
 
-            if needs_reinit {
-                drop(current_sink.take());
-                drop(stream_state.take());
-                if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
-                    stream_state = Some((stream, handle, current_device));
+                    if needs_reinit {
+                        drop(current_sink.take());
+                        drop(stream_state.take());
+                        if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
+                            stream_state = Some((stream, handle, current_device));
+                        }
+                    }
+
+                    let Some((_, ref handle, _)) = stream_state else { continue };
+
+                    // Create a new sink per sound — old sink dropped to stop previous sound
+                    drop(current_sink.take());
+                    if let Ok(sink) = rodio::Sink::try_new(handle) {
+                        if let Ok(source) = rodio::Decoder::new(Cursor::new(data)) {
+                            sink.append(source);
+                            current_sink = Some(sink);
+                        }
+                    }
                 }
-            }
-
-            let Some((_, ref handle, _)) = stream_state else { continue };
-
-            // Create a new sink per sound (stream stays open = no crackling)
-            // Old sink is dropped here; only causes a click if previous sound was still playing
-            drop(current_sink.take());
-            if let Ok(sink) = rodio::Sink::try_new(handle) {
-                if let Ok(source) = rodio::Decoder::new(Cursor::new(data)) {
-                    sink.append(source);
-                    current_sink = Some(sink);
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // No sound played for STREAM_IDLE_TIMEOUT_SECS seconds.
+                    // Release the audio stream so Bluetooth devices can go idle
+                    // and other audio sources (e.g. phone) can take over.
+                    if current_sink.as_ref().map_or(true, |s| s.empty()) {
+                        drop(current_sink.take());
+                        drop(stream_state.take());
+                    }
                 }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
     });
