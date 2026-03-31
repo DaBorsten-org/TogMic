@@ -32,11 +32,8 @@ export interface AppContextType {
   devices: AudioDevice[];
   profiles: HotkeyProfile[];
   activeProfile: HotkeyProfile | null;
-  isMuted: boolean;
   settings: AppSettings;
   refreshDevices: () => Promise<void>;
-  toggleMute: () => Promise<void>;
-  setMute: (muted: boolean) => Promise<void>;
   saveProfile: (profile: HotkeyProfile) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;
   setActiveProfile: (profile: HotkeyProfile) => Promise<void>;

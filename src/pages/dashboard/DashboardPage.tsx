@@ -1,4 +1,5 @@
 import { useApp } from "@/contexts/useApp";
+import { useMuteState } from "@/contexts/useMuteState";
 import { MuteIndicator } from "@/components/MuteIndicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,8 @@ const formatKey = (key: string) => KEY_LABELS[key] ?? key;
 
 export function DashboardPage() {
   const { t } = useTranslation();
-  const { activeProfile, devices, isMuted } = useApp();
+  const { activeProfile, devices } = useApp();
+  const { isMuted } = useMuteState();
 
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";

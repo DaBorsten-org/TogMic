@@ -1,4 +1,5 @@
 import { useApp } from '@/contexts/useApp';
+import { useMuteState } from '@/contexts/useMuteState';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff } from 'lucide-react';
@@ -6,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 export function MuteIndicator() {
   const { t } = useTranslation();
-  const { isMuted, toggleMute, activeProfile } = useApp();
+  const { isMuted, toggleMute } = useMuteState();
+  const { activeProfile } = useApp();
   const disabled = !activeProfile;
 
   const handleClick = () => {

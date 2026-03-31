@@ -16,6 +16,7 @@ import {
   type Config,
   type AppContextType,
 } from "@/contexts/AppContext";
+import { MuteContext, type MuteContextType } from "@/contexts/MuteContext";
 
 export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }: { children: ReactNode; onNavigateToUpdates?: (version: string, body?: string, date?: string) => void; onRequestInstall?: () => void }) {
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -392,15 +393,18 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     }
   }, [configLoaded, settings.startMuted, settings.closeToTray, settings.checkUpdates, t]);
 
+  const muteValue: MuteContextType = {
+    isMuted,
+    toggleMute,
+    setMute,
+  };
+
   const value: AppContextType = {
     devices,
     profiles,
     activeProfile,
-    isMuted,
     settings,
     refreshDevices,
-    toggleMute,
-    setMute,
     saveProfile,
     deleteProfile,
     setActiveProfile,
@@ -409,5 +413,9 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     updateSettings,
   };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <MuteContext.Provider value={muteValue}>
+      <AppContext.Provider value={value}>{children}</AppContext.Provider>
+    </MuteContext.Provider>
+  );
 }

@@ -455,18 +455,15 @@ fn get_active_profile(state: State<AppState>) -> Result<Option<HotkeyProfile>, S
     Ok(profile_lock.clone())
 }
 
-#[tauri::command]
-fn register_hotkey(
-    hotkey: String,
-    ignore_modifiers: Option<bool>,
-    app: AppHandle,
-    state: State<AppState>,
+fn do_register_hotkey(
+    hotkey: &str,
+    ignore_modifiers: bool,
+    app: &AppHandle,
+    state: &AppState,
 ) -> Result<(), String> {
-    // Unregister all existing shortcuts first
     let _ = app.global_shortcut().unregister_all();
 
-    // Build list of shortcut strings to register
-    let hotkeys_to_register: Vec<String> = if ignore_modifiers.unwrap_or(false) {
+    let hotkeys_to_register: Vec<String> = if ignore_modifiers {
         // Register all modifier combinations so the hotkey fires regardless of held modifiers
         let prefixes = [
             "",
@@ -483,7 +480,7 @@ fn register_hotkey(
             .map(|p| format!("{}{}", p, hotkey))
             .collect()
     } else {
-        vec![hotkey.clone()]
+        vec![hotkey.to_string()]
     };
 
     let audio_controller = state.audio_controller.clone();
@@ -549,6 +546,16 @@ fn register_hotkey(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn register_hotkey(
+    hotkey: String,
+    ignore_modifiers: Option<bool>,
+    app: AppHandle,
+    state: State<AppState>,
+) -> Result<(), String> {
+    do_register_hotkey(&hotkey, ignore_modifiers.unwrap_or(false), &app, &state)
 }
 
 #[tauri::command]
@@ -737,18 +744,35 @@ fn trim_process_memory() {
 fn update_tray_icon(app: &AppHandle, is_muted: bool) {
     // Avoid redundant tray updates by comparing with cached visible state
     let state = app.state::<AppState>();
-    let dark_mode = is_system_dark_mode();
     let mut last_muted_lock = state.last_tray_muted.lock().unwrap();
     let mut last_dark_lock = state.last_tray_dark_mode.lock().unwrap();
 
     let mute_unchanged = last_muted_lock.map_or(false, |prev| prev == is_muted);
+
+    // Defer the registry read: when mute changed, use the cached dark-mode value
+    // (avoids a registry syscall on every toggle). Only call is_system_dark_mode()
+    // when: (a) no cache yet, or (b) mute is unchanged (theme-change-listener path,
+    // where the theme may have just changed and the cache is stale).
+    let dark_mode = if mute_unchanged || last_dark_lock.is_none() {
+        is_system_dark_mode()
+    } else {
+        last_dark_lock.unwrap()
+    };
+
     let theme_unchanged = last_dark_lock.map_or(false, |prev| prev == dark_mode);
     if mute_unchanged && theme_unchanged {
         return; // nothing to update
     }
 
     if let Some(tray) = app.tray_by_id("main-tray") {
-        let icon = get_tray_icon(is_muted);
+        // Use pre-computed dark_mode to select the icon, avoiding a second registry
+        // read that would otherwise happen inside get_tray_icon.
+        let icon = match (is_muted, dark_mode) {
+            (true, true) => LAZY_TRAY_MUTED_DARK.clone(),
+            (true, false) => LAZY_TRAY_MUTED_LIGHT.clone(),
+            (false, true) => LAZY_TRAY_UNMUTED_DARK.clone(),
+            (false, false) => LAZY_TRAY_UNMUTED_LIGHT.clone(),
+        };
         let _ = tray.set_icon(Some(icon));
         let tooltip = if is_muted {
             state.tray_tooltip_muted.lock().unwrap().clone()
@@ -964,6 +988,19 @@ pub fn run() {
                                 update_tray_icon(&app.handle(), system_muted);
                             }
                         }
+                        drop(controller_lock);
+                        drop(profile_lock);
+
+                        // Register the hotkey immediately at startup — don't wait for the
+                        // frontend to load (which adds a multi-second delay).
+                        if let Err(e) = do_register_hotkey(
+                            &profile.toggle_key,
+                            profile.ignore_modifiers,
+                            &app.handle(),
+                            &state,
+                        ) {
+                            eprintln!("[startup] Failed to register hotkey: {}", e);
+                        }
                     }
                 }
 
@@ -1001,60 +1038,125 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             start_theme_change_listener(app.handle().clone());
 
-            // Start background polling thread to sync mute state with system
-            let app_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                // Initialize audio subsystem for this thread (e.g., COM on Windows)
-                let _ = PlatformAudioController::init_thread();
+            // On Windows: use zero-CPU COM callbacks instead of a polling loop.
+            // IAudioEndpointVolumeCallback fires on external mute changes;
+            // IMMNotificationClient fires on device plug/unplug.
+            #[cfg(target_os = "windows")]
+            {
+                let app_handle_mute = app.handle().clone();
+                let on_mute_changed = std::sync::Arc::new(move |_raw_muted: bool| {
+                    let state = app_handle_mute.state::<AppState>();
 
-                let poll_controller = match PlatformAudioController::new() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        eprintln!("Failed to create polling audio controller: {}", e);
-                        return;
-                    }
-                };
-
-                let mut prev_device_ids: Option<Vec<String>> = None;
-                loop {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-
-                    let state = app_handle.state::<AppState>();
-
+                    // Read the profile and query the actual profile mute state instead of
+                    // using the raw callback value directly. Callbacks fire for ALL capture
+                    // devices, but the profile may only care about one specific device.
+                    // Using the raw value from a non-profile device would corrupt is_muted.
                     let profile = {
-                        let profile_lock = state.current_profile.lock().unwrap();
-                        profile_lock.as_ref().cloned()
+                        let lock = state.current_profile.lock().unwrap();
+                        match lock.as_ref().cloned() {
+                            Some(p) => p,
+                            None => return,
+                        }
                     };
 
-                    if let Some(profile) = profile {
-                        // Device list change detection: enumerate devices and compare ids
-                        if let Ok(devs) = poll_controller.enumerate_input_devices() {
-                            let ids: Vec<String> = devs.iter().map(|d| d.id.clone()).collect();
-                            if prev_device_ids.as_ref() != Some(&ids) {
-                                prev_device_ids = Some(ids.clone());
-                                // Invalidate cached endpoints when devices change
-                                #[cfg(target_os = "windows")]
-                                audio::clear_endpoint_cache();
-                                // Emit devices changed event
-                                let _ = app_handle.emit("devices-changed", ids);
+                    let cached = state.is_muted.load(Ordering::SeqCst);
+                    let system_muted = {
+                        let controller_lock = state.audio_controller.lock().unwrap();
+                        match controller_lock.as_ref() {
+                            Some(controller) => {
+                                match get_profile_mute_state(controller, &profile, cached) {
+                                    Ok(m) => m,
+                                    Err(_) => return,
+                                }
                             }
+                            None => return,
                         }
+                    }; // controller_lock released here
 
-                        let cached = state.is_muted.load(Ordering::SeqCst);
+                    let prev = state.is_muted.load(Ordering::SeqCst);
+                    if prev != system_muted {
+                        state.is_muted.store(system_muted, Ordering::SeqCst);
+                        let _ = app_handle_mute.emit("mute-state-changed", system_muted);
+                        update_tray_icon(&app_handle_mute, system_muted);
+                    }
+                });
 
-                        if let Ok(system_muted) =
-                            get_profile_mute_state(&poll_controller, &profile, cached)
-                        {
-                            let prev = state.is_muted.load(Ordering::SeqCst);
-                            if prev != system_muted {
-                                state.is_muted.store(system_muted, Ordering::SeqCst);
-                                let _ = app_handle.emit("mute-state-changed", system_muted);
-                                update_tray_icon(&app_handle, system_muted);
+                let app_handle_dev = app.handle().clone();
+                let on_devices_changed = std::sync::Arc::new(move || {
+                    audio::clear_endpoint_cache();
+                    // Enumerate directly on the COM STA thread using the already-cached
+                    // THREAD_ENUMERATOR — avoids creating a second enumerator via audio_controller.
+                    if let Ok(ids) = audio::enumerate_capture_device_ids() {
+                        let _ = app_handle_dev.emit("devices-changed", ids);
+                    }
+                });
+
+                audio::start_audio_listeners(on_mute_changed, on_devices_changed);
+            }
+
+            // On non-Windows platforms: keep the polling loop as fallback
+            #[cfg(not(target_os = "windows"))]
+            {
+                let app_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let _ = PlatformAudioController::init_thread();
+
+                    let poll_controller = match PlatformAudioController::new() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("Failed to create polling audio controller: {}", e);
+                            return;
+                        }
+                    };
+
+                    let mut prev_device_ids: Option<Vec<String>> = None;
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+
+                        let state = app_handle.state::<AppState>();
+                        let profile = {
+                            let profile_lock = state.current_profile.lock().unwrap();
+                            profile_lock.as_ref().cloned()
+                        };
+
+                        if let Some(profile) = profile {
+                            if let Ok(devs) = poll_controller.enumerate_input_devices() {
+                                let ids: Vec<String> =
+                                    devs.iter().map(|d| d.id.clone()).collect();
+                                if prev_device_ids.as_ref() != Some(&ids) {
+                                    prev_device_ids = Some(ids.clone());
+                                    let _ = app_handle.emit("devices-changed", ids);
+                                }
+
+                                let cached = state.is_muted.load(Ordering::SeqCst);
+                                let system_muted = if profile_uses_all_devices(&profile) {
+                                    if devs.is_empty() {
+                                        cached
+                                    } else {
+                                        devs.iter().all(|d| {
+                                            poll_controller
+                                                .get_mute_state(&d.id)
+                                                .unwrap_or(cached)
+                                        })
+                                    }
+                                } else if let Some(first) = profile.device_ids.first() {
+                                    poll_controller
+                                        .get_mute_state(first)
+                                        .unwrap_or(cached)
+                                } else {
+                                    cached
+                                };
+
+                                if cached != system_muted {
+                                    state.is_muted.store(system_muted, Ordering::SeqCst);
+                                    let _ = app_handle.emit("mute-state-changed", system_muted);
+                                    update_tray_icon(&app_handle, system_muted);
+                                }
                             }
                         }
                     }
-                }
-            });
+                });
+            }
 
             Ok(())
         })

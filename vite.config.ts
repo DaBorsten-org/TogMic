@@ -15,6 +15,28 @@ export default defineConfig(async () => ({
     },
   },
 
+  // Pre-bundle all known heavy dependencies at server start instead of on first page request.
+  // Without this, Vite holds the initial HTML response for 10-15s while esbuild bundles on demand.
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "i18next",
+      "react-i18next",
+      "i18next-http-backend",
+      "i18next-browser-languagedetector",
+      "lucide-react",
+      "sonner",
+      "@tauri-apps/api/core",
+      "@tauri-apps/api/event",
+      "@tauri-apps/api/window",
+      "@tauri-apps/plugin-store",
+      "@tauri-apps/plugin-updater",
+      "@tauri-apps/plugin-process",
+    ],
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

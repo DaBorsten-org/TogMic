@@ -3,10 +3,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ptr;
 use std::result::Result as StdResult;
-use windows::core::{ComInterface, Interface, GUID, HSTRING};
+use std::sync::Arc;
+use windows::core::{implement, ComInterface, Interface, GUID, HSTRING};
 use windows::Win32::Foundation::*;
-use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-use windows::Win32::Media::Audio::IMMDeviceEnumerator;
+use windows::Win32::Media::Audio::Endpoints::{
+    IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
+};
+use windows::Win32::Media::Audio::{AUDIO_VOLUME_NOTIFICATION_DATA, IMMDeviceEnumerator};
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToStringAlloc};
 use windows::Win32::System::Com::*;
@@ -264,4 +267,238 @@ pub fn clear_endpoint_cache() {
     });
 }
 
-// IMMNotificationClient support was removed due to dependency version conflicts.
+/// Enumerate active capture device IDs on the current thread.
+/// Uses the cached THREAD_ENUMERATOR — safe to call from the COM STA listener thread
+/// where the enumerator is already initialized by setup_listeners().
+pub fn enumerate_capture_device_ids() -> StdResult<Vec<String>, String> {
+    unsafe {
+        let enumerator = thread_enumerator()?;
+        let collection = enumerator
+            .EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)
+            .map_err(|e| format!("EnumAudioEndpoints failed: {}", e))?;
+        let count = collection
+            .GetCount()
+            .map_err(|e| format!("GetCount failed: {}", e))?;
+        let mut ids = Vec::with_capacity(count as usize);
+        for i in 0..count {
+            if let Ok(device) = collection.Item(i) {
+                if let Ok(id_pwstr) = device.GetId() {
+                    let id = id_pwstr.to_string().unwrap_or_default();
+                    CoTaskMemFree(Some(id_pwstr.0 as *const _));
+                    ids.push(id);
+                }
+            }
+        }
+        Ok(ids)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IAudioEndpointVolumeCallback — fires when any app changes mute on a device
+// ---------------------------------------------------------------------------
+
+pub type MuteChangedFn = Arc<dyn Fn(bool) + Send + Sync>;
+pub type DevicesChangedFn = Arc<dyn Fn() + Send + Sync>;
+
+#[implement(IAudioEndpointVolumeCallback)]
+struct MuteCallback {
+    on_mute_changed: MuteChangedFn,
+}
+
+impl IAudioEndpointVolumeCallback_Impl for MuteCallback {
+    fn OnNotify(&self, data: *mut AUDIO_VOLUME_NOTIFICATION_DATA) -> windows::core::Result<()> {
+        if data.is_null() {
+            return Ok(());
+        }
+        let muted = unsafe { (*data).bMuted.as_bool() };
+        (self.on_mute_changed)(muted);
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IMMNotificationClient — fires on device plug/unplug/state changes
+// ---------------------------------------------------------------------------
+
+#[implement(IMMNotificationClient)]
+struct DeviceNotificationClient {
+    on_devices_changed: DevicesChangedFn,
+}
+
+impl IMMNotificationClient_Impl for DeviceNotificationClient {
+    fn OnDeviceStateChanged(
+        &self,
+        _pwstrid: &windows::core::PCWSTR,
+        _dwnewstate: u32,
+    ) -> windows::core::Result<()> {
+        (self.on_devices_changed)();
+        Ok(())
+    }
+
+    fn OnDeviceAdded(&self, _pwstrid: &windows::core::PCWSTR) -> windows::core::Result<()> {
+        (self.on_devices_changed)();
+        Ok(())
+    }
+
+    fn OnDeviceRemoved(&self, _pwstrid: &windows::core::PCWSTR) -> windows::core::Result<()> {
+        (self.on_devices_changed)();
+        Ok(())
+    }
+
+    fn OnDefaultDeviceChanged(
+        &self,
+        flow: EDataFlow,
+        _role: ERole,
+        _pwstrdefaultdeviceid: &windows::core::PCWSTR,
+    ) -> windows::core::Result<()> {
+        // Only care about capture (microphone) devices
+        if flow == eCapture {
+            (self.on_devices_changed)();
+        }
+        Ok(())
+    }
+
+    fn OnPropertyValueChanged(
+        &self,
+        _pwstrid: &windows::core::PCWSTR,
+        _key: &windows::Win32::UI::Shell::PropertiesSystem::PROPERTYKEY,
+    ) -> windows::core::Result<()> {
+        Ok(())
+    }
+}
+
+/// Registered callbacks kept alive for the lifetime of the listener thread.
+/// Dropping these unregisters them automatically.
+struct AudioListenerHandles {
+    enumerator: IMMDeviceEnumerator,
+    notification_client: IMMNotificationClient,
+    /// (endpoint, callback) pairs — one per monitored device
+    endpoint_callbacks: Vec<(IAudioEndpointVolume, IAudioEndpointVolumeCallback)>,
+}
+
+impl Drop for AudioListenerHandles {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self
+                .enumerator
+                .UnregisterEndpointNotificationCallback(&self.notification_client);
+            for (ep, cb) in &self.endpoint_callbacks {
+                let _ = ep.UnregisterControlChangeNotify(cb);
+            }
+        }
+    }
+}
+
+/// Spawn a dedicated STA thread that registers COM callbacks for:
+///   - mute state changes on all active capture devices
+///   - device plug/unplug events
+///
+/// The `on_mute_changed` closure is called from the COM callback thread whenever
+/// any monitored device's mute state changes.
+/// The `on_devices_changed` closure is called when the device list changes.
+///
+/// Returns immediately; the listener thread runs for the lifetime of the process.
+pub fn start_audio_listeners(
+    on_mute_changed: MuteChangedFn,
+    on_devices_changed: DevicesChangedFn,
+) {
+    std::thread::spawn(move || {
+        // STA is required for IMMNotificationClient callbacks on Windows
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        }
+
+        // Keep current_handles in scope so registered callbacks live as long as this thread.
+        // Re-register every 2 s so newly plugged-in devices get mute callbacks too.
+        // Actual mute events arrive with zero latency via the COM callback — the
+        // 2 s interval only matters for registering endpoints on newly added devices.
+        let mut _handles = match setup_listeners(&on_mute_changed, &on_devices_changed) {
+            Ok(h) => h,
+            Err(e) => {
+                eprintln!("[audio] Failed to set up COM listeners: {}", e);
+                return;
+            }
+        };
+
+        let on_mute_changed_clone = on_mute_changed.clone();
+        let on_devices_changed_clone = on_devices_changed.clone();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if let Ok(new_handles) =
+                setup_listeners(&on_mute_changed_clone, &on_devices_changed_clone)
+            {
+                _handles = new_handles;
+            }
+        }
+    });
+}
+
+fn setup_listeners(
+    on_mute_changed: &MuteChangedFn,
+    on_devices_changed: &DevicesChangedFn,
+) -> StdResult<AudioListenerHandles, String> {
+    unsafe {
+        // Use thread_enumerator() so the STA thread's THREAD_ENUMERATOR cache is populated.
+        // This means enumerate_capture_device_ids() called from on_devices_changed callbacks
+        // (on this same thread) reuses the cached enumerator instead of creating a second one.
+        let enumerator = thread_enumerator()
+            .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+
+        // Register device notification client
+        let notification_client: IMMNotificationClient =
+            DeviceNotificationClient {
+                on_devices_changed: on_devices_changed.clone(),
+            }
+            .into();
+        enumerator
+            .RegisterEndpointNotificationCallback(&notification_client)
+            .map_err(|e| format!("RegisterEndpointNotificationCallback failed: {}", e))?;
+
+        // Enumerate all active capture devices and register a mute callback on each
+        let collection = enumerator
+            .EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)
+            .map_err(|e| format!("EnumAudioEndpoints failed: {}", e))?;
+        let count = collection
+            .GetCount()
+            .map_err(|e| format!("GetCount failed: {}", e))?;
+
+        let mut endpoint_callbacks = Vec::new();
+
+        for i in 0..count {
+            let device = match collection.Item(i) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let endpoint = match activate_audio_endpoint(&device) {
+                Ok(ep) => ep,
+                Err(_) => continue,
+            };
+            let cb: IAudioEndpointVolumeCallback = MuteCallback {
+                on_mute_changed: on_mute_changed.clone(),
+            }
+            .into();
+            if endpoint.RegisterControlChangeNotify(&cb).is_ok() {
+                endpoint_callbacks.push((endpoint, cb));
+            }
+        }
+
+        // Also register on the default device (in case it's not in the collection)
+        if let Ok(default_dev) = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole) {
+            if let Ok(endpoint) = activate_audio_endpoint(&default_dev) {
+                let cb: IAudioEndpointVolumeCallback = MuteCallback {
+                    on_mute_changed: on_mute_changed.clone(),
+                }
+                .into();
+                if endpoint.RegisterControlChangeNotify(&cb).is_ok() {
+                    endpoint_callbacks.push((endpoint, cb));
+                }
+            }
+        }
+
+        Ok(AudioListenerHandles {
+            enumerator,
+            notification_client,
+            endpoint_callbacks,
+        })
+    }
+}

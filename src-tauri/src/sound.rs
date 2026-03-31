@@ -23,7 +23,9 @@ fn default_device_name() -> Option<String> {
 
 /// Initialize the persistent audio thread (call once at startup)
 pub fn init() {
-    let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(1);
+    // Buffer up to 8 sounds so rapid toggles don't silently drop messages;
+    // the debounce loop below drains this queue and plays only the latest.
+    let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(8);
     if SOUND_TX.set(tx).is_err() {
         return;
     }
@@ -35,7 +37,18 @@ pub fn init() {
 
         loop {
             match rx.recv_timeout(Duration::from_secs(STREAM_IDLE_TIMEOUT_SECS)) {
-                Ok(data) => {
+                Ok(mut data) => {
+                    // Debounce rapid toggles: drain any sounds queued within the
+                    // next 40 ms and keep only the latest. This prevents overlap
+                    // when the user mutes/unmutes faster than the sound duration.
+                    loop {
+                        match rx.recv_timeout(Duration::from_millis(40)) {
+                            Ok(newer) => data = newer,
+                            Err(mpsc::RecvTimeoutError::Timeout) => break,
+                            Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                        }
+                    }
+
                     let current_device = default_device_name().unwrap_or_default();
 
                     // Reinitialize stream only if device changed or not yet initialized

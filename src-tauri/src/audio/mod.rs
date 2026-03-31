@@ -5,6 +5,10 @@ mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::clear_endpoint_cache;
 #[cfg(target_os = "windows")]
+pub use windows::enumerate_capture_device_ids;
+#[cfg(target_os = "windows")]
+pub use windows::start_audio_listeners;
+#[cfg(target_os = "windows")]
 pub use windows::WindowsAudioController as PlatformAudioController;
 
 #[cfg(target_os = "macos")]
