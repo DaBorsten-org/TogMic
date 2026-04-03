@@ -13,7 +13,7 @@ import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Play, Square, Edit, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -33,7 +33,7 @@ const KEY_LABELS: Record<string, string> = {
 
 const formatKey = (key: string) => KEY_LABELS[key] ?? key;
 
-export function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
+export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
   const { t } = useTranslation();
   const { setActiveProfile, deactivateProfile, deleteProfile, devices } = useApp();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -42,37 +42,37 @@ export function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
 
-  const handleActivate = async () => {
+  const handleActivate = useCallback(async () => {
     try {
       await setActiveProfile(profile);
     } catch (error) {
       console.error("Failed to activate profile:", error);
       setActivateError(t("activateProfileError"));
     }
-  };
+  }, [setActiveProfile, profile, t]);
 
-  const handleDeactivate = async () => {
+  const handleDeactivate = useCallback(async () => {
     try {
       await deactivateProfile();
     } catch (error) {
       console.error("Failed to deactivate profile:", error);
     }
-  };
+  }, [deactivateProfile]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(() => {
     setShowDeleteDialog(true);
-  };
+  }, []);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     try {
       await deleteProfile(profile.id);
       setShowDeleteDialog(false);
     } catch (error) {
       console.error("Failed to delete profile:", error);
     }
-  };
+  }, [deleteProfile, profile.id]);
 
-  const getDeviceNames = () => {
+  const deviceNames = useMemo(() => {
     if (profile.deviceIds.length > 1 || profile.deviceIds.includes(allDevicesId)) {
       return t("allDevices");
     }
@@ -84,7 +84,7 @@ export function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
         return devices.find((d) => d.id === id)?.name || t("unknownDevice");
       })
       .join(", ");
-  };
+  }, [profile.deviceIds, devices, t]);
 
   return (
     <Card
@@ -117,7 +117,7 @@ export function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
 
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">{t("devices")}</p>
-          <p className="text-sm">{getDeviceNames()}</p>
+          <p className="text-sm">{deviceNames}</p>
         </div>
       </CardContent>
 
@@ -163,4 +163,4 @@ export function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
       />
     </Card>
   );
-}
+});

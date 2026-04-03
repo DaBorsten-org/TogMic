@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import type { KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -17,13 +17,13 @@ export function HotkeyInput({
 }: HotkeyInputProps) {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
-  const [displayValue, setDisplayValue] = useState(value);
+  const [recordedKey, setRecordedKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    setDisplayValue(value);
-  }, [value]);
+  const displayValue = isRecording
+    ? (recordedKey ?? t("hotkeyPressKeys"))
+    : (value || "");
 
-  const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!isRecording) return;
 
     e.preventDefault();
@@ -68,21 +68,21 @@ export function HotkeyInput({
     // Allow single F-keys without modifiers, or any key with modifiers
     if (keys.length >= 1 && (keys[0].startsWith("F") || keys.length > 1)) {
       const hotkey = keys.join("+");
-      setDisplayValue(hotkey);
+      setRecordedKey(hotkey);
       onChange(hotkey);
       setIsRecording(false);
     }
-  };
+  }, [isRecording, onChange]);
 
-  const handleFocus = () => {
+  const handleFocus = useCallback(() => {
+    setRecordedKey(null);
     setIsRecording(true);
-    setDisplayValue(t("hotkeyPressKeys"));
-  };
+  }, []);
 
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
     setIsRecording(false);
-    setDisplayValue(value || "");
-  };
+    setRecordedKey(null);
+  }, []);
 
   return (
     <Input

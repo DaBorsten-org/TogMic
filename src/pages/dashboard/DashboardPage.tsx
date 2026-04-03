@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 const KEY_LABELS: Record<string, string> = {
@@ -25,21 +26,23 @@ export function DashboardPage() {
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
 
-  const resolveDeviceLabel = (deviceId: string) => {
+  const resolveDeviceLabel = useCallback((deviceId: string) => {
     if (deviceId === defaultDeviceId) return t("defaultDevice");
     if (deviceId === allDevicesId) return t("allDevices");
     return devices.find((device) => device.id === deviceId)?.name ?? t("unknownDevice");
-  };
+  }, [devices, t]);
 
-  const deviceCount =
+  const deviceCount = useMemo(() =>
     (activeProfile?.deviceIds.length ?? 0) > 1 || activeProfile?.deviceIds.includes(allDevicesId)
       ? devices.length
-      : activeProfile?.deviceIds.length ?? 0;
+      : activeProfile?.deviceIds.length ?? 0,
+  [activeProfile, devices]);
 
-  const displayDeviceIds =
+  const displayDeviceIds = useMemo(() =>
     (activeProfile?.deviceIds.length ?? 0) > 1 || activeProfile?.deviceIds.includes(allDevicesId)
       ? [allDevicesId]
-      : (activeProfile?.deviceIds ?? []);
+      : (activeProfile?.deviceIds ?? []),
+  [activeProfile]);
 
   return (
     <div className="space-y-6">

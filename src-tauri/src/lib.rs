@@ -979,13 +979,25 @@ pub fn run() {
                         *profile_lock = Some(profile.clone());
                         let controller_lock = state.audio_controller.lock().unwrap();
                         if let Some(controller) = controller_lock.as_ref() {
-                            let cached = state.is_muted.load(Ordering::SeqCst);
-                            if let Ok(system_muted) =
-                                get_profile_mute_state(controller, &profile, cached)
-                            {
-                                state.is_muted.store(system_muted, Ordering::SeqCst);
-                                let _ = app.handle().emit("mute-state-changed", system_muted);
-                                update_tray_icon(&app.handle(), system_muted);
+                            // Apply start_muted immediately before the frontend loads
+                            if app_settings.start_muted {
+                                if let Ok(device_ids) = resolve_device_ids(controller, &profile) {
+                                    for device_id in &device_ids {
+                                        let _ = controller.set_mute_state(device_id, true);
+                                    }
+                                }
+                                state.is_muted.store(true, Ordering::SeqCst);
+                                let _ = app.handle().emit("mute-state-changed", true);
+                                update_tray_icon(&app.handle(), true);
+                            } else {
+                                let cached = state.is_muted.load(Ordering::SeqCst);
+                                if let Ok(system_muted) =
+                                    get_profile_mute_state(controller, &profile, cached)
+                                {
+                                    state.is_muted.store(system_muted, Ordering::SeqCst);
+                                    let _ = app.handle().emit("mute-state-changed", system_muted);
+                                    update_tray_icon(&app.handle(), system_muted);
+                                }
                             }
                         }
                         drop(controller_lock);

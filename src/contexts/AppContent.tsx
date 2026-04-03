@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -17,6 +17,7 @@ import {
   type AppContextType,
 } from "@/contexts/AppContext";
 import { MuteContext, type MuteContextType } from "@/contexts/MuteContext";
+import { SettingsContext, type SettingsContextType } from "@/contexts/SettingsContext";
 
 export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }: { children: ReactNode; onNavigateToUpdates?: (version: string, body?: string, date?: string) => void; onRequestInstall?: () => void }) {
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -41,6 +42,14 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
   const onRequestInstallRef = useRef(onRequestInstall);
   onRequestInstallRef.current = onRequestInstall;
   const { t, i18n } = useTranslation();
+
+  // Keep refs in sync so stable useCallbacks always read latest state
+  const profilesRef = useRef(profiles);
+  profilesRef.current = profiles;
+  const activeProfileRef = useRef(activeProfile);
+  activeProfileRef.current = activeProfile;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   const getStore = async () => {
     if (!storeRef.current) {
@@ -110,37 +119,37 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     }
   }, []);
 
-  // Save config to store
-  const saveConfig = async (updatedConfig: Partial<Config>) => {
+  // Save config to store — stable callback that reads from refs
+  const saveConfig = useCallback(async (updatedConfig: Partial<Config>) => {
     try {
       const store = await getStore();
-      await store.set("profiles", updatedConfig.profiles ?? profiles);
+      await store.set("profiles", updatedConfig.profiles ?? profilesRef.current);
       await store.set(
         "activeProfileId",
         updatedConfig.activeProfileId !== undefined
           ? updatedConfig.activeProfileId
-          : (activeProfile?.id ?? null),
+          : (activeProfileRef.current?.id ?? null),
       );
-      await store.set("appSettings", updatedConfig.appSettings ?? settings);
+      await store.set("appSettings", updatedConfig.appSettings ?? settingsRef.current);
       await store.save();
     } catch (error) {
       console.error("Failed to save config:", error);
       throw error;
     }
-  };
+  }, []);
 
   // Refresh devices list
-  const refreshDevices = async () => {
+  const refreshDevices = useCallback(async () => {
     try {
       const devicesList = await invoke<AudioDevice[]>("get_audio_devices");
       setDevices(devicesList);
     } catch (error) {
       console.error("Failed to get devices:", error);
     }
-  };
+  }, []);
 
   // Toggle mute state
-  const toggleMute = async () => {
+  const toggleMute = useCallback(async () => {
     try {
       const newState = await invoke<boolean>("toggle_mute");
       setIsMuted(newState);
@@ -148,10 +157,10 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to toggle mute:", error);
       throw error;
     }
-  };
+  }, []);
 
   // Set mute state explicitly
-  const setMute = async (muted: boolean, silent?: boolean) => {
+  const setMute = useCallback(async (muted: boolean, silent?: boolean) => {
     try {
       await invoke("set_mute", { muted, silent });
       setIsMuted(muted);
@@ -159,50 +168,51 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to set mute:", error);
       throw error;
     }
-  };
+  }, []);
 
   // Save profile
-  const saveProfile = async (profile: HotkeyProfile) => {
+  const saveProfile = useCallback(async (profile: HotkeyProfile) => {
     try {
       // Validate with backend
       await invoke("save_profile", { profile });
 
       // Update local state
-      const existingIndex = profiles.findIndex(
+      const currentProfiles = profilesRef.current;
+      const existingIndex = currentProfiles.findIndex(
         (p: HotkeyProfile) => p.id === profile.id,
       );
       let updatedProfiles: HotkeyProfile[];
 
       if (existingIndex >= 0) {
-        updatedProfiles = [...profiles];
+        updatedProfiles = [...currentProfiles];
         updatedProfiles[existingIndex] = profile;
       } else {
-        updatedProfiles = [...profiles, profile];
+        updatedProfiles = [...currentProfiles, profile];
       }
 
       setProfiles(updatedProfiles);
       await saveConfig({ profiles: updatedProfiles });
 
       // If the saved profile is currently active, reactivate it to apply changes
-      if (activeProfile?.id === profile.id) {
+      if (activeProfileRef.current?.id === profile.id) {
         await setActiveProfile(profile);
       }
     } catch (error) {
       console.error("Failed to save profile:", error);
       throw error;
     }
-  };
+  }, [saveConfig]);
 
   // Delete profile
-  const deleteProfile = async (id: string) => {
+  const deleteProfile = useCallback(async (id: string) => {
     try {
-      const updatedProfiles = profiles.filter(
+      const updatedProfiles = profilesRef.current.filter(
         (p: HotkeyProfile) => p.id !== id,
       );
       setProfiles(updatedProfiles);
 
       // If deleted profile was active, unregister hotkey and clear active profile
-      if (activeProfile?.id === id) {
+      if (activeProfileRef.current?.id === id) {
         // Unregister hotkey first
         await invoke("unregister_hotkey");
 
@@ -218,10 +228,10 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to delete profile:", error);
       throw error;
     }
-  };
+  }, [saveConfig]);
 
   // Set active profile
-  const setActiveProfile = async (profile: HotkeyProfile) => {
+  const setActiveProfile = useCallback(async (profile: HotkeyProfile) => {
     try {
       // Set in backend
       await invoke("set_active_profile", { profile });
@@ -243,10 +253,10 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to set active profile:", error);
       throw error;
     }
-  };
+  }, [saveConfig]);
 
   // Deactivate current profile
-  const deactivateProfile = async () => {
+  const deactivateProfile = useCallback(async () => {
     try {
       // Unregister hotkey
       await invoke("unregister_hotkey");
@@ -258,22 +268,22 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to deactivate profile:", error);
       throw error;
     }
-  };
+  }, [saveConfig]);
 
   // Register hotkey
-  const registerHotkey = async (hotkey: string) => {
+  const registerHotkey = useCallback(async (hotkey: string) => {
     try {
       await invoke("register_hotkey", { hotkey });
     } catch (error) {
       console.error("Failed to register hotkey:", error);
       throw error;
     }
-  };
+  }, []);
 
   // Update settings
-  const updateSettings = async (newSettings: Partial<AppSettings>) => {
+  const updateSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
     try {
-      const updatedSettings = { ...settings, ...newSettings };
+      const updatedSettings = { ...settingsRef.current, ...newSettings };
       setSettings(updatedSettings);
       await saveConfig({ appSettings: updatedSettings });
 
@@ -292,7 +302,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to update settings:", error);
       throw error;
     }
-  };
+  }, [saveConfig]);
 
   // Initialize on mount
   useEffect(() => {
@@ -347,13 +357,11 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     if (!configLoaded || startupApplied.current) return;
     startupApplied.current = true;
 
-    // Apply start muted if enabled (only once at startup).
-    // setState is placed in the .then() callback per the rule's recommended pattern.
-    if (settings.startMuted) {
-      invoke("set_mute", { muted: true, silent: true })
-        .then(() => setIsMuted(true))
-        .catch(console.error);
-    }
+    // start_muted is now handled by the Rust backend immediately at launch,
+    // so we only need to sync the frontend's isMuted state with the backend.
+    invoke<boolean>("get_mute_state")
+      .then((muted) => setIsMuted(muted))
+      .catch(console.error);
 
     // Sync close-to-tray setting with backend on startup
     if (settings.closeToTray !== undefined) {
@@ -393,29 +401,34 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     }
   }, [configLoaded, settings.startMuted, settings.closeToTray, settings.checkUpdates, t]);
 
-  const muteValue: MuteContextType = {
+  const muteValue: MuteContextType = useMemo(() => ({
     isMuted,
     toggleMute,
     setMute,
-  };
+  }), [isMuted, toggleMute, setMute]);
 
-  const value: AppContextType = {
+  const appValue: AppContextType = useMemo(() => ({
     devices,
     profiles,
     activeProfile,
-    settings,
     refreshDevices,
     saveProfile,
     deleteProfile,
     setActiveProfile,
     deactivateProfile,
     registerHotkey,
+  }), [devices, profiles, activeProfile, refreshDevices, saveProfile, deleteProfile, setActiveProfile, deactivateProfile, registerHotkey]);
+
+  const settingsValue: SettingsContextType = useMemo(() => ({
+    settings,
     updateSettings,
-  };
+  }), [settings, updateSettings]);
 
   return (
     <MuteContext.Provider value={muteValue}>
-      <AppContext.Provider value={value}>{children}</AppContext.Provider>
+      <SettingsContext.Provider value={settingsValue}>
+        <AppContext.Provider value={appValue}>{children}</AppContext.Provider>
+      </SettingsContext.Provider>
     </MuteContext.Provider>
   );
 }

@@ -32,14 +32,12 @@ export interface AppContextType {
   devices: AudioDevice[];
   profiles: HotkeyProfile[];
   activeProfile: HotkeyProfile | null;
-  settings: AppSettings;
   refreshDevices: () => Promise<void>;
   saveProfile: (profile: HotkeyProfile) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;
   setActiveProfile: (profile: HotkeyProfile) => Promise<void>;
   deactivateProfile: () => Promise<void>;
   registerHotkey: (hotkey: string) => Promise<void>;
-  updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

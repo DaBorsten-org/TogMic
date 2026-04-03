@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
-import { useApp } from "@/contexts/useApp";
-import { useState, useEffect } from "react";
+import { useSettings } from "@/contexts/useSettings";
+import { useState, useEffect, useCallback } from "react";
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,7 +84,7 @@ function ThemePreview({ value }: { value: "light" | "dark" | "system" }) {
 export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, triggerInstallDialog, onInstallDialogTriggered }: { initialTab?: string; availableUpdate?: { version: string; body?: string; date?: string }; onUpdateFound?: (update: { version: string; body?: string; date?: string }) => void; triggerInstallDialog?: boolean; onInstallDialogTriggered?: () => void }) {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState(initialTab ?? "appearance");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string>("");
@@ -111,46 +111,46 @@ export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, trigg
     i18n.changeLanguage(lng);
   };
 
-  const handleStartMutedChange = async (checked: boolean) => {
+  const handleStartMutedChange = useCallback(async (checked: boolean) => {
     try {
       await updateSettings({ startMuted: checked });
     } catch (error) {
       console.error("Failed to update start muted setting:", error);
     }
-  };
+  }, [updateSettings]);
 
-  const handleStartMinimizedChange = async (checked: boolean) => {
+  const handleStartMinimizedChange = useCallback(async (checked: boolean) => {
     try {
       await updateSettings({ startMinimized: checked });
     } catch (error) {
       console.error("Failed to update start minimized setting:", error);
     }
-  };
+  }, [updateSettings]);
 
-  const handleAutostartChange = async (checked: boolean) => {
+  const handleAutostartChange = useCallback(async (checked: boolean) => {
     try {
       await updateSettings({ autostart: checked });
     } catch (error) {
       console.error("Failed to update autostart setting:", error);
       setErrorMessage(t("autostartError"));
     }
-  };
+  }, [updateSettings, t]);
 
-  const handleCheckUpdatesChange = async (checked: boolean) => {
+  const handleCheckUpdatesChange = useCallback(async (checked: boolean) => {
     try {
       await updateSettings({ checkUpdates: checked });
     } catch (error) {
       console.error("Failed to update check updates setting:", error);
     }
-  };
+  }, [updateSettings]);
 
-  const handleCloseToTrayChange = async (checked: boolean) => {
+  const handleCloseToTrayChange = useCallback(async (checked: boolean) => {
     try {
       await updateSettings({ closeToTray: checked });
     } catch (error) {
       console.error("Failed to update close to tray setting:", error);
     }
-  };
+  }, [updateSettings]);
 
   const handleCheckForUpdates = async () => {
     setIsCheckingUpdate(true);

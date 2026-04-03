@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useApp } from "@/contexts/useApp";
 import type { HotkeyProfile } from "@/contexts/AppContext";
 import { HotkeyInput } from "@/components/HotkeyInput";
@@ -62,17 +62,16 @@ export function ProfileEditor({
     profile?.ignoreModifiers ?? false,
   );
   const [error, setError] = useState("");
-  const [dropdownKey, setDropdownKey] = useState(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const resolveDeviceLabel = (deviceId: string) => {
+  const resolveDeviceLabel = useCallback((deviceId: string) => {
     if (deviceId === defaultDeviceId) return t("defaultDevice");
     if (deviceId === allDevicesId) return t("allDevices");
     const device = devices.find((entry) => entry.id === deviceId);
     return device?.name ?? t("unknownDevice");
-  };
+  }, [devices, t]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -105,20 +104,19 @@ export function ProfileEditor({
     } catch (err) {
       setError(err instanceof Error ? err.message : t("failedToSave"));
     }
-  };
+  }, [name, toggleKey, selectedDeviceId, ignoreModifiers, profile, saveProfile, onSave, t]);
 
-  const handleDropdownOpenChange = async (isOpen: boolean) => {
+  const handleDropdownOpenChange = useCallback(async (isOpen: boolean) => {
     setDropdownOpen(isOpen);
     if (isOpen) {
       await refreshDevices();
-      setDropdownKey((prev) => prev + 1);
     }
-  };
+  }, [refreshDevices]);
 
-  const handleDeviceSelect = (value: string) => {
+  const handleDeviceSelect = useCallback((value: string) => {
     setSelectedDeviceId(value);
     setDropdownOpen(false);
-  };
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
@@ -173,7 +171,7 @@ export function ProfileEditor({
                 </span>
                 <ChevronDown className="h-4 w-4 opacity-70" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent key={dropdownKey} className="max-h-64">
+              <DropdownMenuContent className="max-h-64">
                 <DropdownMenuRadioGroup
                   value={selectedDeviceId}
                   onValueChange={handleDeviceSelect}

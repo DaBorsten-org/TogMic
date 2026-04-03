@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { RefreshCw, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -23,29 +23,29 @@ export function ProfilesPage() {
     null,
   );
 
-  const handleNewProfile = () => {
+  const handleNewProfile = useCallback(() => {
     setEditingProfile(null);
     setShowEditor(true);
-  };
+  }, []);
 
-  const handleEditProfile = (profile: HotkeyProfile) => {
+  const handleEditProfile = useCallback((profile: HotkeyProfile) => {
     setEditingProfile(profile);
     setShowEditor(true);
-  };
+  }, []);
 
-  const handleCloseEditor = () => {
+  const handleCloseEditor = useCallback(() => {
     setShowEditor(false);
     setEditingProfile(null);
-  };
+  }, []);
 
-  const handleRefreshDevices = async () => {
+  const handleRefreshDevices = useCallback(async () => {
     try {
       await refreshDevices();
       toast.success(t("devicesRefreshed"));
     } catch {
       toast.error(t("devicesRefreshFailed"));
     }
-  };
+  }, [refreshDevices, t]);
 
   return (
     <div className="space-y-8">

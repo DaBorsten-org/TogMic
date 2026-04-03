@@ -3,6 +3,7 @@ import { useMuteState } from '@/contexts/useMuteState';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff } from 'lucide-react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export function MuteIndicator() {
@@ -11,9 +12,9 @@ export function MuteIndicator() {
   const { activeProfile } = useApp();
   const disabled = !activeProfile;
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     toggleMute();
-  };
+  }, [toggleMute]);
 
   return (
     <div className="flex justify-center">

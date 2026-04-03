@@ -24,7 +24,6 @@ export default defineConfig(async () => ({
       "react-dom/client",
       "i18next",
       "react-i18next",
-      "i18next-http-backend",
       "i18next-browser-languagedetector",
       "lucide-react",
       "sonner",
@@ -34,6 +33,7 @@ export default defineConfig(async () => ({
       "@tauri-apps/plugin-store",
       "@tauri-apps/plugin-updater",
       "@tauri-apps/plugin-process",
+      "@base-ui/react",
     ],
   },
 

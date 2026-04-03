@@ -408,11 +408,21 @@ pub fn start_audio_listeners(
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         }
 
+        // Channel used by the DeviceNotificationClient callback to signal this
+        // thread that the device list changed and listeners should be re-registered.
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+
+        // Wrap on_devices_changed to also signal re-registration
+        let on_devices_changed_signaling: DevicesChangedFn = {
+            let on_devices_changed = on_devices_changed.clone();
+            Arc::new(move || {
+                on_devices_changed();
+                let _ = tx.send(());
+            })
+        };
+
         // Keep current_handles in scope so registered callbacks live as long as this thread.
-        // Re-register every 2 s so newly plugged-in devices get mute callbacks too.
-        // Actual mute events arrive with zero latency via the COM callback — the
-        // 2 s interval only matters for registering endpoints on newly added devices.
-        let mut _handles = match setup_listeners(&on_mute_changed, &on_devices_changed) {
+        let mut _handles = match setup_listeners(&on_mute_changed, &on_devices_changed_signaling) {
             Ok(h) => h,
             Err(e) => {
                 eprintln!("[audio] Failed to set up COM listeners: {}", e);
@@ -420,12 +430,15 @@ pub fn start_audio_listeners(
             }
         };
 
-        let on_mute_changed_clone = on_mute_changed.clone();
-        let on_devices_changed_clone = on_devices_changed.clone();
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            // Wait for a device-change signal instead of polling every 2 s.
+            // A 30 s timeout acts as a safety net to catch edge cases.
+            let _ = rx.recv_timeout(std::time::Duration::from_secs(30));
+            // Drain any additional queued signals to avoid redundant re-registrations
+            while rx.try_recv().is_ok() {}
+
             if let Ok(new_handles) =
-                setup_listeners(&on_mute_changed_clone, &on_devices_changed_clone)
+                setup_listeners(&on_mute_changed, &on_devices_changed_signaling)
             {
                 _handles = new_handles;
             }
