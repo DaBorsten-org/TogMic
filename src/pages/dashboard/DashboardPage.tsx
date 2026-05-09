@@ -47,36 +47,42 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">{t("dashboard")}</h1>
-        <p className="text-muted-foreground mt-1">{t("dashboardSubtitle")}</p>
+        <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
+          Overview · 1 of 1
+        </p>
+        <h1 className="font-serif text-4xl font-normal tracking-tight text-foreground">
+          {t("dashboard")}<span className="text-primary">.</span>
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("dashboardSubtitle")}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Mute state card — tinted based on current state */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Mute state card */}
         <Card
           className={cn(
-            "flex items-center justify-center border-2 transition-colors duration-300",
+            "flex items-center justify-center border transition-colors duration-300 overflow-hidden",
             !activeProfile && "border-border",
-            activeProfile && isMuted && "border-red-500/40 bg-red-500/5",
-            activeProfile && !isMuted && "border-green-500/40 bg-green-500/5",
+            activeProfile && isMuted && "border-neutral-400/30",
+            activeProfile && !isMuted && "border-primary/30",
           )}
+          style={{ boxShadow: "var(--shadow-card)" }}
         >
-          <CardContent className="py-12">
+          <CardContent className="py-14">
             <MuteIndicator />
           </CardContent>
         </Card>
 
         {/* Active profile card */}
-        <Card className="border-2 border-border">
+        <Card className="border" style={{ boxShadow: "var(--shadow-card)" }}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="font-mono text-[10px] font-normal text-muted-foreground uppercase tracking-[0.2em]">
               {t("activeProfile")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {activeProfile ? (
               <div className="space-y-4">
-                <p className="text-2xl font-bold leading-tight">{activeProfile.name}</p>
+                <p className="font-serif text-3xl font-normal leading-tight">{activeProfile.name}</p>
 
                 <Separator />
 
@@ -101,7 +107,8 @@ export function DashboardPage() {
                     </span>
                     <div className="flex flex-wrap gap-1 justify-end">
                       {displayDeviceIds.map((id) => (
-                        <Badge key={id} variant="secondary" className="text-xs">
+                        <Badge key={id} variant="secondary" className="text-xs"
+                          style={{ boxShadow: "var(--shadow-btn)" }}>
                           {resolveDeviceLabel(id)}
                         </Badge>
                       ))}

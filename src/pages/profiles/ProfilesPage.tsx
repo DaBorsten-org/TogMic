@@ -50,11 +50,16 @@ export function ProfilesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">{t("profiles")}</h1>
-        <p className="text-muted-foreground mt-1">{t("profilesSubtitle")}</p>
+        <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
+          Library · {profiles.length} total
+        </p>
+        <h1 className="font-serif text-4xl font-normal tracking-tight">
+          {t("profiles")}<span className="text-primary">.</span>
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("profilesSubtitle")}</p>
       </div>
 
-      <Card>
+      <Card style={{ boxShadow: "var(--shadow-card)" }}>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

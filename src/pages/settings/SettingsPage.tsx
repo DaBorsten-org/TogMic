@@ -197,8 +197,11 @@ export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, trigg
   return (
     <div className="space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold">{t("settings")}</h1>
-        <p className="text-muted-foreground mt-1">{t("settingsSubtitle")}</p>
+        <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">Preferences</p>
+        <h1 className="font-serif text-4xl font-normal tracking-tight">
+          {t("settings")}<span className="text-primary">.</span>
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("settingsSubtitle")}</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -209,7 +212,7 @@ export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, trigg
         </TabsList>
 
         <TabsContent value="appearance" className="space-y-6 mt-6">
-          <Card>
+          <Card style={{ boxShadow: "var(--shadow-card)" }}>
             <CardHeader>
               <CardTitle>{t("theme")}</CardTitle>
               <CardDescription>{t("appearanceDesc")}</CardDescription>
@@ -238,7 +241,7 @@ export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, trigg
             </CardContent>
           </Card>
 
-          <Card>
+          <Card style={{ boxShadow: "var(--shadow-card)" }}>
             <CardHeader>
               <CardTitle>{t("language")}</CardTitle>
               <CardDescription>{t("languageDesc")}</CardDescription>
@@ -267,7 +270,7 @@ export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, trigg
         </TabsContent>
 
         <TabsContent value="behavior" className="mt-6">
-          <Card>
+          <Card style={{ boxShadow: "var(--shadow-card)" }}>
             <CardHeader>
               <CardTitle>{t("appBehavior")}</CardTitle>
               <CardDescription>{t("appBehaviorDesc")}</CardDescription>
@@ -317,7 +320,7 @@ export function SettingsPage({ initialTab, availableUpdate, onUpdateFound, trigg
         </TabsContent>
 
         <TabsContent value="updates" className="mt-6 space-y-4">
-          <Card>
+          <Card style={{ boxShadow: "var(--shadow-card)" }}>
             <CardHeader>
               <CardTitle>{t("updates")}</CardTitle>
               <CardDescription>{t("updatesDesc")}</CardDescription>
