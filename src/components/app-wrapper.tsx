@@ -12,17 +12,15 @@ import {
 import { AppProvider } from "@/contexts/AppContent";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MuteContext } from "@/contexts/MuteContext";
 import { AppContext } from "@/contexts/AppContext";
-import { MicIcon, MicOffIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type Page = "dashboard" | "profiles" | "settings";
 
 function HeaderMuteChip() {
-  const { isMuted, toggleMute } = useContext(MuteContext);
-  const { activeProfile } = useContext(AppContext);
+  const { isMuted, toggleMute } = useContext(MuteContext)!;
+  const { activeProfile } = useContext(AppContext)!;
 
   if (!activeProfile) return null;
 
@@ -125,11 +123,11 @@ export function AppWrapper() {
               <div className="flex-1" />
               <HeaderMuteChip />
             </header>
-            <ScrollArea className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="p-6 pt-8">
                 {renderPage()}
               </div>
-            </ScrollArea>
+            </div>
           </SidebarInset>
         </SidebarProvider>
       </AppProvider>
