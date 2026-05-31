@@ -1,10 +1,11 @@
 use super::{AudioController, AudioDevice};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ptr;
 use std::result::Result as StdResult;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use windows::core::{implement, ComInterface, Interface, GUID, HSTRING};
+use windows::core::{implement, GUID, HSTRING};
 use windows::Win32::Foundation::*;
 use windows::Win32::Media::Audio::Endpoints::{
     IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
@@ -19,6 +20,27 @@ use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, PROPERTYKEY};
 thread_local! {
     static THREAD_ENUMERATOR: RefCell<Option<IMMDeviceEnumerator>> = RefCell::new(None);
     static THREAD_ENDPOINT_CACHE: RefCell<HashMap<String, IAudioEndpointVolume>> = RefCell::new(HashMap::new());
+    // Generation this thread's endpoint cache was last validated against.
+    static LOCAL_CACHE_GENERATION: Cell<u64> = const { Cell::new(0) };
+}
+
+// Global cache generation. Bumped whenever the device topology changes (plug/unplug,
+// default-device change). Each thread compares its LOCAL_CACHE_GENERATION against this
+// and clears its own thread-local endpoint cache when they differ. This makes cache
+// invalidation work across threads — a thread-local `clear()` only ever affected the
+// calling thread, leaving stale `"default-mic"` endpoints in command/worker threads.
+static GLOBAL_CACHE_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+// Drop this thread's cached endpoints if the global generation has advanced since we
+// last validated. Called before every endpoint lookup.
+fn ensure_cache_fresh() {
+    let global = GLOBAL_CACHE_GENERATION.load(Ordering::Acquire);
+    LOCAL_CACHE_GENERATION.with(|local| {
+        if local.get() != global {
+            THREAD_ENDPOINT_CACHE.with(|cache| cache.borrow_mut().clear());
+            local.set(global);
+        }
+    });
 }
 
 pub struct WindowsAudioController;
@@ -33,55 +55,10 @@ const PKEY_DEVICE_DESC: PROPERTYKEY = PROPERTYKEY {
     pid: 2,
 };
 
-// Manual FFI binding for IMMDevice::Activate since it's not properly exposed
-#[repr(C)]
-struct IMMDeviceVtbl {
-    // IUnknown methods
-    query_interface: unsafe extern "system" fn(
-        *const std::ffi::c_void,
-        *const GUID,
-        *mut *mut std::ffi::c_void,
-    ) -> i32,
-    add_ref: unsafe extern "system" fn(*const std::ffi::c_void) -> u32,
-    release: unsafe extern "system" fn(*const std::ffi::c_void) -> u32,
-    // IMMDevice methods
-    activate: unsafe extern "system" fn(
-        *const std::ffi::c_void,    // this
-        *const GUID,                // iid
-        u32,                        // dwClsCtx
-        *const std::ffi::c_void,    // pActivationParams
-        *mut *mut std::ffi::c_void, // ppInterface
-    ) -> i32,
-    // ... other methods we don't need
-}
-
 unsafe fn activate_audio_endpoint(device: &IMMDevice) -> StdResult<IAudioEndpointVolume, String> {
-    let device_ptr = device.as_raw() as *const *const IMMDeviceVtbl;
-    let vtbl = *device_ptr;
-
-    let iid = &IAudioEndpointVolume::IID;
-    let mut ppv: *mut std::ffi::c_void = std::ptr::null_mut();
-
-    let hr = ((*vtbl).activate)(
-        device.as_raw() as *const std::ffi::c_void,
-        iid as *const GUID,
-        CLSCTX_ALL.0,
-        std::ptr::null(),
-        &mut ppv as *mut *mut std::ffi::c_void,
-    );
-
-    if hr < 0 {
-        return Err(format!(
-            "IMMDevice::Activate failed with HRESULT: 0x{:08X}",
-            hr
-        ));
-    }
-
-    if ppv.is_null() {
-        return Err("Activate returned null pointer".to_string());
-    }
-
-    Ok(IAudioEndpointVolume::from_raw(ppv))
+    device
+        .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
+        .map_err(|e| format!("IMMDevice::Activate failed: {}", e))
 }
 
 // Get or create a per-thread IMMDeviceEnumerator
@@ -105,6 +82,11 @@ unsafe fn thread_enumerator() -> StdResult<IMMDeviceEnumerator, String> {
 
 // Get or create a cached endpoint volume for a given device id on this thread
 unsafe fn get_cached_endpoint_for_id(device_id: &str) -> StdResult<IAudioEndpointVolume, String> {
+    // Drop any endpoints cached before the last device-topology change so we never
+    // hand out a stale endpoint (notably the "default-mic" endpoint after the default
+    // capture device changed).
+    ensure_cache_fresh();
+
     // First try the cache
     if let Some(ep) = THREAD_ENDPOINT_CACHE.with(|cache| cache.borrow().get(device_id).cloned()) {
         return Ok(ep);
@@ -260,10 +242,16 @@ impl AudioController for WindowsAudioController {
     }
 }
 
-// Clear the per-thread endpoint cache (call when devices change)
+// Invalidate cached endpoints on ALL threads (call when devices change).
+// Bumps the global generation so every thread drops its stale endpoints on next use,
+// and clears the calling thread's cache immediately.
 pub fn clear_endpoint_cache() {
+    GLOBAL_CACHE_GENERATION.fetch_add(1, Ordering::Release);
     THREAD_ENDPOINT_CACHE.with(|cache| {
         cache.borrow_mut().clear();
+    });
+    LOCAL_CACHE_GENERATION.with(|local| {
+        local.set(GLOBAL_CACHE_GENERATION.load(Ordering::Acquire));
     });
 }
 

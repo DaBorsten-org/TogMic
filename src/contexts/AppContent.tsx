@@ -324,6 +324,14 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       }
     });
 
+    // Listen for device plug/unplug so the device list stays in sync with the hardware.
+    // The backend emits the changed IDs, but we re-fetch the full list to get fresh names.
+    const unlistenDevices = listen<string[]>("devices-changed", () => {
+      if (mounted) {
+        refreshDevices();
+      }
+    });
+
     // When window gains focus after a background notification, navigate to updates and show toast
     const win = getCurrentWindow();
     const unlistenFocus = win.listen("tauri://focus", () => {
@@ -346,9 +354,10 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     return () => {
       mounted = false;
       unlistenMute.then((fn) => fn());
+      unlistenDevices.then((fn) => fn());
       unlistenFocus.then((fn) => fn());
     };
-  }, [loadConfig, t]);
+  }, [loadConfig, refreshDevices, t]);
 
   // Apply startup-only settings once after config is loaded.
   // This ensures toggling `startMuted` in settings doesn't immediately mute the app;

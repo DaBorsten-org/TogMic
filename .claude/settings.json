@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cargo check --manifest-path src-tauri/Cargo.toml --message-format short 2>&1)",
+      "PowerShell(bun run build 2>&1)",
+      "PowerShell(bunx eslint src/contexts/AppContent.tsx 2>&1)"
+    ]
+  }
+}
