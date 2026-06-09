@@ -400,9 +400,7 @@ fn toggle_mute(state: State<AppState>, app: AppHandle) -> Result<bool, String> {
         let profile_lock = state.current_profile.lock_safe();
         match (controller_lock.as_ref(), profile_lock.as_ref()) {
             (Some(_), Some(profile)) => profile.clone(),
-            _ => {
-                return Err("No active profile or audio controller not initialized".to_string())
-            }
+            _ => return Err("No active profile or audio controller not initialized".to_string()),
         }
     };
 
@@ -440,9 +438,7 @@ fn set_mute(
         let profile_lock = state.current_profile.lock_safe();
         match (controller_lock.as_ref(), profile_lock.as_ref()) {
             (Some(_), Some(profile)) => profile.clone(),
-            _ => {
-                return Err("No active profile or audio controller not initialized".to_string())
-            }
+            _ => return Err("No active profile or audio controller not initialized".to_string()),
         }
     };
 
@@ -759,7 +755,9 @@ fn trim_process_memory() {
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
     };
-    use windows::Win32::System::Memory::{SetProcessWorkingSetSizeEx, QUOTA_LIMITS_HARDWS_MIN_DISABLE};
+    use windows::Win32::System::Memory::{
+        SetProcessWorkingSetSizeEx, QUOTA_LIMITS_HARDWS_MIN_DISABLE,
+    };
     use windows::Win32::System::Threading::{
         GetCurrentProcess, GetCurrentProcessId, OpenProcess, PROCESS_SET_QUOTA,
     };
@@ -881,9 +879,7 @@ fn toggle_mute_internal(state: &AppState, app: &AppHandle) -> Result<bool, Strin
         let profile_lock = state.current_profile.lock_safe();
         match (controller_lock.as_ref(), profile_lock.as_ref()) {
             (Some(_), Some(profile)) => profile.clone(),
-            _ => {
-                return Err("No active profile or audio controller not initialized".to_string())
-            }
+            _ => return Err("No active profile or audio controller not initialized".to_string()),
         }
     };
 
@@ -964,7 +960,23 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tauri::command]
-async fn show_update_notification(app: AppHandle, title: String, body: String) -> Result<(), String> {
+fn set_window_theme(app: AppHandle, theme: String) -> Result<(), String> {
+    use tauri::Theme;
+    let window = app.get_webview_window("main").ok_or("no main window")?;
+    let t = match theme.as_str() {
+        "light" => Some(Theme::Light),
+        "dark" => Some(Theme::Dark),
+        _ => None,
+    };
+    window.set_theme(t).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn show_update_notification(
+    app: AppHandle,
+    title: String,
+    body: String,
+) -> Result<(), String> {
     app.notification()
         .builder()
         .title(&title)
@@ -1017,6 +1029,7 @@ pub fn run() {
             set_close_to_tray,
             update_tray_labels,
             show_update_notification,
+            set_window_theme,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1218,8 +1231,7 @@ pub fn run() {
 
                         if let Some(profile) = profile {
                             if let Ok(devs) = poll_controller.enumerate_input_devices() {
-                                let ids: Vec<String> =
-                                    devs.iter().map(|d| d.id.clone()).collect();
+                                let ids: Vec<String> = devs.iter().map(|d| d.id.clone()).collect();
                                 if prev_device_ids.as_ref() != Some(&ids) {
                                     prev_device_ids = Some(ids.clone());
                                     let _ = app_handle.emit("devices-changed", ids);
@@ -1231,15 +1243,11 @@ pub fn run() {
                                         cached
                                     } else {
                                         devs.iter().all(|d| {
-                                            poll_controller
-                                                .get_mute_state(&d.id)
-                                                .unwrap_or(cached)
+                                            poll_controller.get_mute_state(&d.id).unwrap_or(cached)
                                         })
                                     }
                                 } else if let Some(first) = profile.device_ids.first() {
-                                    poll_controller
-                                        .get_mute_state(first)
-                                        .unwrap_or(cached)
+                                    poll_controller.get_mute_state(first).unwrap_or(cached)
                                 } else {
                                     cached
                                 };

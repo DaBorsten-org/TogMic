@@ -35,7 +35,7 @@ function HeaderMuteChip() {
           "active:translate-y-px",
           isLive
             ? "border-primary/60 bg-primary/10 text-primary hover:bg-primary/15"
-            : "border-border bg-card text-muted-foreground hover:bg-muted"
+            : "border-border bg-card text-muted-foreground hover:bg-muted",
         )}
         style={{
           boxShadow: isLive
@@ -46,11 +46,13 @@ function HeaderMuteChip() {
         <span
           className={cn(
             "size-2 rounded-full shrink-0",
-            isLive ? "bg-primary" : "bg-muted-foreground/50"
+            isLive ? "bg-primary" : "bg-muted-foreground/50",
           )}
           style={{
             animation: isLive ? "tog-pulse 1.4s infinite" : "none",
-            boxShadow: isLive ? "0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent)" : "none",
+            boxShadow: isLive
+              ? "0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent)"
+              : "none",
           }}
         />
         {isLive ? "Mic Live" : "Muted"}
@@ -65,19 +67,25 @@ function HeaderMuteChip() {
   );
 }
 
-
 export function AppWrapper() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
-  const [settingsInitialTab, setSettingsInitialTab] = useState<string | undefined>(undefined);
-  const [availableUpdate, setAvailableUpdate] = useState<{ version: string; body?: string; date?: string } | undefined>(undefined);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<
+    string | undefined
+  >(undefined);
+  const [availableUpdate, setAvailableUpdate] = useState<
+    { version: string; body?: string; date?: string } | undefined
+  >(undefined);
   const [triggerInstallDialog, setTriggerInstallDialog] = useState(false);
   const { t } = useTranslation();
 
-  const handleNavigateToUpdates = useCallback((version: string, body?: string, date?: string) => {
-    setCurrentPage("settings");
-    setSettingsInitialTab("updates");
-    setAvailableUpdate({ version, body, date });
-  }, []);
+  const handleNavigateToUpdates = useCallback(
+    (version: string, body?: string, date?: string) => {
+      setCurrentPage("settings");
+      setSettingsInitialTab("updates");
+      setAvailableUpdate({ version, body, date });
+    },
+    [],
+  );
 
   const renderPage = () => {
     switch (currentPage) {
@@ -86,7 +94,15 @@ export function AppWrapper() {
       case "profiles":
         return <ProfilesPage />;
       case "settings":
-        return <SettingsPage initialTab={settingsInitialTab} availableUpdate={availableUpdate} onUpdateFound={setAvailableUpdate} triggerInstallDialog={triggerInstallDialog} onInstallDialogTriggered={() => setTriggerInstallDialog(false)} />;
+        return (
+          <SettingsPage
+            initialTab={settingsInitialTab}
+            availableUpdate={availableUpdate}
+            onUpdateFound={setAvailableUpdate}
+            triggerInstallDialog={triggerInstallDialog}
+            onInstallDialogTriggered={() => setTriggerInstallDialog(false)}
+          />
+        );
       default:
         return <DashboardPage />;
     }
@@ -106,9 +122,16 @@ export function AppWrapper() {
   };
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider>
       <Toaster />
-      <AppProvider onNavigateToUpdates={handleNavigateToUpdates} onRequestInstall={() => { setCurrentPage("settings"); setSettingsInitialTab("updates"); setTriggerInstallDialog(true); }}>
+      <AppProvider
+        onNavigateToUpdates={handleNavigateToUpdates}
+        onRequestInstall={() => {
+          setCurrentPage("settings");
+          setSettingsInitialTab("updates");
+          setTriggerInstallDialog(true);
+        }}
+      >
         <SidebarProvider className="h-svh">
           <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
           <SidebarInset className="overflow-hidden flex flex-col">
@@ -116,17 +139,19 @@ export function AppWrapper() {
               <SidebarTrigger className="-ml-1" />
               <div className="h-4 w-px bg-border" />
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">TogMic</span>
+                <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
+                  TogMic
+                </span>
                 <span className="text-muted-foreground/30 text-[10px]">/</span>
-                <span className="font-mono text-[10px] tracking-widest uppercase font-semibold">{getPageTitle()}</span>
+                <span className="font-mono text-[10px] tracking-widest uppercase font-semibold">
+                  {getPageTitle()}
+                </span>
               </div>
               <div className="flex-1" />
               <HeaderMuteChip />
             </header>
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="p-6 pt-8">
-                {renderPage()}
-              </div>
+              <div className="p-6 pt-8">{renderPage()}</div>
             </div>
           </SidebarInset>
         </SidebarProvider>
