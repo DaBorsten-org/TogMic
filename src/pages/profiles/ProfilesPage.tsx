@@ -49,7 +49,10 @@ export function ProfilesPage() {
 
   return (
     <div className="space-y-8">
-      <div>
+      <div
+        className="opacity-0 translate-y-2"
+        style={{ animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards" }}
+      >
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
           Library · {profiles.length} total
         </p>
@@ -59,7 +62,13 @@ export function ProfilesPage() {
         <p className="text-muted-foreground mt-1 text-sm">{t("profilesSubtitle")}</p>
       </div>
 
-      <Card style={{ boxShadow: "var(--shadow-card)" }}>
+      <Card
+        className="opacity-0 translate-y-2"
+        style={{
+          boxShadow: "var(--shadow-card)",
+          animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
+        }}
+      >
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

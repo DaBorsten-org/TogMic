@@ -46,7 +46,10 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div
+        className="opacity-0 translate-y-2"
+        style={{ animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards" }}
+      >
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
           Overview · 1 of 1
         </p>
@@ -60,12 +63,17 @@ export function DashboardPage() {
         {/* Mute state card */}
         <Card
           className={cn(
-            "flex items-center justify-center border transition-colors duration-300 overflow-hidden",
+            "flex items-center justify-center border overflow-hidden",
+            "transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
+            "opacity-0 translate-y-2",
             !activeProfile && "border-border",
             activeProfile && isMuted && "border-neutral-400/30",
             activeProfile && !isMuted && "border-primary/30",
           )}
-          style={{ boxShadow: "var(--shadow-card)" }}
+          style={{
+            boxShadow: "var(--shadow-card)",
+            animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
+          }}
         >
           <CardContent className="py-14">
             <MuteIndicator />
@@ -73,7 +81,13 @@ export function DashboardPage() {
         </Card>
 
         {/* Active profile card */}
-        <Card className="border" style={{ boxShadow: "var(--shadow-card)" }}>
+        <Card
+          className="border opacity-0 translate-y-2"
+          style={{
+            boxShadow: "var(--shadow-card)",
+            animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 120ms forwards",
+          }}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="font-mono text-[10px] font-normal text-muted-foreground uppercase tracking-[0.2em]">
               {t("activeProfile")}

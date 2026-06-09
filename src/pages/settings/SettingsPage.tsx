@@ -327,7 +327,10 @@ export function SettingsPage({
 
   return (
     <div className="space-y-8 max-w-3xl">
-      <div>
+      <div
+        className="opacity-0 translate-y-2"
+        style={{ animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards" }}
+      >
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
           Preferences
         </p>
@@ -340,6 +343,10 @@ export function SettingsPage({
         </p>
       </div>
 
+      <div
+        className="opacity-0 translate-y-2"
+        style={{ animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards" }}
+      >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full">
           <TabsTrigger value="appearance" className="flex-1">
@@ -367,9 +374,11 @@ export function SettingsPage({
                     type="button"
                     onClick={() => setTheme(value)}
                     className={cn(
-                      "flex-1 flex flex-col items-center gap-2 rounded-xl border-2 p-1.5 pb-2.5 transition-all",
+                      "flex-1 flex flex-col items-center gap-2 rounded-xl border-2 p-1.5 pb-2.5",
+                      "transition-[border-color,transform,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                      "hover:scale-[1.015] active:scale-[0.985]",
                       theme === value
-                        ? "border-primary shadow-sm"
+                        ? "border-primary shadow-sm scale-[1.015]"
                         : "border-border hover:border-muted-foreground/50",
                     )}
                   >
@@ -604,6 +613,7 @@ export function SettingsPage({
           onCancel={() => setShowUpdateDialog(false)}
         />
       )}
+      </div>
     </div>
   );
 }

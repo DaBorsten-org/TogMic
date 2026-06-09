@@ -89,7 +89,9 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
   return (
     <Card
       className={cn(
-        "relative flex flex-col border transition-all duration-200 overflow-hidden",
+        "relative flex flex-col border overflow-hidden",
+        "transition-[border-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
+        "hover:-translate-y-px active:scale-[0.99] active:translate-y-0",
         isActive ? "border-primary/60" : "border-border",
       )}
       style={{
@@ -100,6 +102,7 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
       <div
         className={cn(
           "absolute top-0 right-0 w-12 h-12 rounded-bl-2xl opacity-80",
+          "transition-[background-color,opacity] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
           isActive ? "bg-primary" : "bg-muted-foreground/20",
         )}
       />

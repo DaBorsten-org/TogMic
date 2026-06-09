@@ -14,14 +14,52 @@ function Switch({
       data-slot="switch"
       data-size={size}
       className={cn(
-        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent shadow-xs transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        // Base layout
+        "peer group/switch relative inline-flex shrink-0 items-center rounded-full outline-none",
+        "after:absolute after:-inset-x-3 after:-inset-y-2",
+        // Sizing
+        "data-[size=default]:h-[26px] data-[size=default]:w-[46px] data-[size=default]:p-[3px]",
+        "data-[size=sm]:h-[20px] data-[size=sm]:w-[36px] data-[size=sm]:p-[2px]",
+        // OFF state: inset shadow gives a pressed-in, recessed look
+        "data-unchecked:bg-input/60 dark:data-unchecked:bg-input/40",
+        "data-unchecked:[box-shadow:inset_0_2px_4px_rgba(0,0,0,0.18),inset_0_1px_2px_rgba(0,0,0,0.12),0_1px_0_rgba(255,255,255,0.06)]",
+        "dark:data-unchecked:[box-shadow:inset_0_2px_5px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(0,0,0,0.3),0_1px_0_rgba(255,255,255,0.04)]",
+        // ON state: raised, glowing
+        "data-checked:bg-primary",
+        "data-checked:[box-shadow:0_0_0_1px_color-mix(in_oklch,var(--color-primary)_80%,transparent),0_1px_3px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.2)]",
+        "dark:data-checked:[box-shadow:0_0_8px_2px_color-mix(in_oklch,var(--color-primary)_35%,transparent),0_0_0_1px_color-mix(in_oklch,var(--color-primary)_60%,transparent),inset_0_1px_0_rgba(255,255,255,0.12)]",
+        // Focus
+        "focus-visible:ring-3 focus-visible:ring-ring/50",
+        // Disabled
+        "data-disabled:cursor-not-allowed data-disabled:opacity-40",
+        // Transition
+        "transition-[background-color,box-shadow] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]",
+        "active:scale-[0.96]",
         className
       )}
       {...props}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] rtl:group-data-[size=default]/switch:data-checked:-translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] rtl:group-data-[size=sm]/switch:data-checked:-translate-x-[calc(100%-2px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 rtl:group-data-[size=default]/switch:data-unchecked:-translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 rtl:group-data-[size=sm]/switch:data-unchecked:-translate-x-0 dark:data-unchecked:bg-foreground"
+        className={cn(
+          "pointer-events-none block rounded-full ring-0",
+          // Thumb sizing per track size
+          "group-data-[size=default]/switch:size-5",
+          "group-data-[size=sm]/switch:size-4",
+          // OFF position
+          "group-data-[size=default]/switch:data-unchecked:translate-x-0",
+          "group-data-[size=sm]/switch:data-unchecked:translate-x-0",
+          // ON position — track width minus thumb size minus 2×padding
+          "group-data-[size=default]/switch:data-checked:translate-x-5",
+          "group-data-[size=sm]/switch:data-checked:translate-x-4",
+          // Thumb color and depth — white pill with subtle shadow for OFF
+          "bg-white",
+          "data-unchecked:[box-shadow:0_1px_3px_rgba(0,0,0,0.22),0_1px_1px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.9)]",
+          // ON: slightly brighter, more prominent shadow
+          "data-checked:[box-shadow:0_2px_4px_rgba(0,0,0,0.28),0_1px_2px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.95)]",
+          // Transition
+          "transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
+        )}
       />
     </SwitchPrimitive.Root>
   )
