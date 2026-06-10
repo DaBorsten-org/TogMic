@@ -10,8 +10,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppProvider } from "@/contexts/AppContent";
-import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
+
 import { MuteContext } from "@/contexts/MuteContext";
 import { AppContext } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
@@ -122,40 +121,37 @@ export function AppWrapper() {
   };
 
   return (
-    <ThemeProvider>
-      <Toaster />
-      <AppProvider
-        onNavigateToUpdates={handleNavigateToUpdates}
-        onRequestInstall={() => {
-          setCurrentPage("settings");
-          setSettingsInitialTab("updates");
-          setTriggerInstallDialog(true);
-        }}
-      >
-        <SidebarProvider className="h-svh">
-          <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
-          <SidebarInset className="overflow-hidden flex flex-col">
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-              <SidebarTrigger className="-ml-1" />
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
-                  TogMic
-                </span>
-                <span className="text-muted-foreground/30 text-[10px]">/</span>
-                <span className="font-mono text-[10px] tracking-widest uppercase font-semibold">
-                  {getPageTitle()}
-                </span>
-              </div>
-              <div className="flex-1" />
-              <HeaderMuteChip />
-            </header>
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="p-6 pt-8">{renderPage()}</div>
+    <AppProvider
+      onNavigateToUpdates={handleNavigateToUpdates}
+      onRequestInstall={() => {
+        setCurrentPage("settings");
+        setSettingsInitialTab("updates");
+        setTriggerInstallDialog(true);
+      }}
+    >
+      <SidebarProvider className="h-svh">
+        <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+        <SidebarInset className="overflow-hidden flex flex-col">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
+                TogMic
+              </span>
+              <span className="text-muted-foreground/30 text-[10px]">/</span>
+              <span className="font-mono text-[10px] tracking-widest uppercase font-semibold">
+                {getPageTitle()}
+              </span>
             </div>
-          </SidebarInset>
-        </SidebarProvider>
-      </AppProvider>
-    </ThemeProvider>
+            <div className="flex-1" />
+            <HeaderMuteChip />
+          </header>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="p-6 pt-8">{renderPage()}</div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </AppProvider>
   );
 }
