@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -38,18 +38,21 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
   const storeRef = useRef<Store | null>(null);
   const pendingUpdateRef = useRef<Update | null>(null);
   const onNavigateToUpdatesRef = useRef(onNavigateToUpdates);
-  onNavigateToUpdatesRef.current = onNavigateToUpdates;
   const onRequestInstallRef = useRef(onRequestInstall);
-  onRequestInstallRef.current = onRequestInstall;
   const { t, i18n } = useTranslation();
 
   // Keep refs in sync so stable useCallbacks always read latest state
   const profilesRef = useRef(profiles);
-  profilesRef.current = profiles;
   const activeProfileRef = useRef(activeProfile);
-  activeProfileRef.current = activeProfile;
   const settingsRef = useRef(settings);
-  settingsRef.current = settings;
+
+  useLayoutEffect(() => {
+    onNavigateToUpdatesRef.current = onNavigateToUpdates;
+    onRequestInstallRef.current = onRequestInstall;
+    profilesRef.current = profiles;
+    activeProfileRef.current = activeProfile;
+    settingsRef.current = settings;
+  });
 
   const getStore = async () => {
     if (!storeRef.current) {
@@ -170,7 +173,31 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     }
   }, []);
 
-  // Save profile
+  // Set active profile
+  const setActiveProfile = useCallback(async (profile: HotkeyProfile) => {
+    try {
+      // Set in backend
+      await invoke("set_active_profile", { profile });
+
+      // Register hotkey
+      await invoke("register_hotkey", {
+        hotkey: profile.toggleKey,
+        ignoreModifiers: profile.ignoreModifiers ?? false,
+      });
+
+      // Update local state
+      setActiveProfileState(profile);
+      await saveConfig({ activeProfileId: profile.id });
+
+      // Get current mute state
+      const muteState = await invoke<boolean>("get_mute_state");
+      setIsMuted(muteState);
+    } catch (error) {
+      console.error("Failed to set active profile:", error);
+      throw error;
+    }
+  }, [saveConfig]);
+
   const saveProfile = useCallback(async (profile: HotkeyProfile) => {
     try {
       // Validate with backend
@@ -201,7 +228,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to save profile:", error);
       throw error;
     }
-  }, [saveConfig]);
+  }, [saveConfig, setActiveProfile]);
 
   // Delete profile
   const deleteProfile = useCallback(async (id: string) => {
@@ -226,31 +253,6 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       }
     } catch (error) {
       console.error("Failed to delete profile:", error);
-      throw error;
-    }
-  }, [saveConfig]);
-
-  // Set active profile
-  const setActiveProfile = useCallback(async (profile: HotkeyProfile) => {
-    try {
-      // Set in backend
-      await invoke("set_active_profile", { profile });
-
-      // Register hotkey
-      await invoke("register_hotkey", {
-        hotkey: profile.toggleKey,
-        ignoreModifiers: profile.ignoreModifiers ?? false,
-      });
-
-      // Update local state
-      setActiveProfileState(profile);
-      await saveConfig({ activeProfileId: profile.id });
-
-      // Get current mute state
-      const muteState = await invoke<boolean>("get_mute_state");
-      setIsMuted(muteState);
-    } catch (error) {
-      console.error("Failed to set active profile:", error);
       throw error;
     }
   }, [saveConfig]);

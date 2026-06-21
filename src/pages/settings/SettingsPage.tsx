@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/components/theme-context";
 import { useSettings } from "@/contexts/useSettings";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
@@ -204,20 +204,27 @@ export function SettingsPage({
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const updateInfo = availableUpdate
-    ? {
-        version: availableUpdate.version,
-        body: availableUpdate.body ?? t("noReleaseNotes"),
-        date: availableUpdate.date,
-      }
-    : null;
+  const updateInfo = useMemo(
+    () =>
+      availableUpdate
+        ? {
+            version: availableUpdate.version,
+            body: availableUpdate.body ?? t("noReleaseNotes"),
+            date: availableUpdate.date,
+          }
+        : null,
+    [availableUpdate, t],
+  );
 
   useEffect(() => {
+    // ponytail: syncing controlled prop to state — legit derived-state pattern
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
 
   useEffect(() => {
     if (triggerInstallDialog && updateInfo) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowUpdateDialog(true);
       onInstallDialogTriggered?.();
     }
