@@ -28,7 +28,7 @@ function HeaderMuteChip() {
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => toggleMute()}
+        onClick={() => { void toggleMute(); }}
         className={cn(
           "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-mono font-semibold tracking-widest uppercase transition-all duration-150 cursor-pointer",
           "active:translate-y-px",

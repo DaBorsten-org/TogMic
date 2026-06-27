@@ -91,7 +91,7 @@ export function HotkeyInput({
       onFocus={handleFocus}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      placeholder={placeholder || t("hotkeyClickToRecord")}
+      placeholder={placeholder ?? t("hotkeyClickToRecord")}
       readOnly
       className={cn(
         "font-mono cursor-pointer",

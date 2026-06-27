@@ -77,7 +77,7 @@ export function ProfilesPage() {
             </div>
             <div className="flex gap-3">
               <Button
-                onClick={handleRefreshDevices}
+                onClick={() => { void handleRefreshDevices(); }}
                 variant="outline"
                 size="lg"
                 title={t("refreshAudioDevices")}

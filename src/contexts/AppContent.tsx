@@ -55,12 +55,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
   });
 
   const getStore = async () => {
-    if (!storeRef.current) {
-      storeRef.current = await load("config.json", {
-        autoSave: false,
-        defaults: {}
-      });
-    }
+    storeRef.current ??= await load("config.json", { autoSave: false, defaults: {} });
     return storeRef.current;
   };
 
@@ -317,7 +312,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       setConfigLoaded(true);
     };
 
-    init();
+    void init();
 
     // Listen for mute state changes
     const unlistenMute = listen<boolean>("mute-state-changed", (event) => {
@@ -330,7 +325,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     // The backend emits the changed IDs, but we re-fetch the full list to get fresh names.
     const unlistenDevices = listen<string[]>("devices-changed", () => {
       if (mounted) {
-        refreshDevices();
+        void refreshDevices();
       }
     });
 
@@ -355,9 +350,9 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
 
     return () => {
       mounted = false;
-      unlistenMute.then((fn) => fn());
-      unlistenDevices.then((fn) => fn());
-      unlistenFocus.then((fn) => fn());
+      void unlistenMute.then((fn) => fn());
+      void unlistenDevices.then((fn) => fn());
+      void unlistenFocus.then((fn) => fn());
     };
   }, [loadConfig, refreshDevices, t]);
 
@@ -375,11 +370,9 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       .catch(console.error);
 
     // Sync close-to-tray setting with backend on startup
-    if (settings.closeToTray !== undefined) {
-      invoke("set_close_to_tray", { enabled: settings.closeToTray }).catch(
-        console.error,
-      );
-    }
+    invoke("set_close_to_tray", { enabled: settings.closeToTray }).catch(
+      console.error,
+    );
 
     // Auto-check for updates on startup if enabled
     if (settings.checkUpdates) {
@@ -399,10 +392,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
                 duration: Infinity,
                 action: {
                   label: t("update"),
-                  onClick: async () => {
-                    await update.downloadAndInstall();
-                    await relaunch();
-                  },
+                  onClick: () => { void update.downloadAndInstall().then(() => relaunch()); },
                 },
               });
             }

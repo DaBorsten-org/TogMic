@@ -9,6 +9,6 @@ describe("cn", () => {
     expect(cn("p-2", "p-4")).toBe("p-4");
   });
   it("drops falsy conditionals", () => {
-    expect(cn("foo", false && "bar", undefined)).toBe("foo");
+    expect(cn("foo", false as boolean && "bar", undefined)).toBe("foo");
   });
 });

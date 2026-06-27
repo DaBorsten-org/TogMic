@@ -4,7 +4,7 @@ import { ThemeContext, type Theme } from "@/components/theme-context";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem("togmic-theme") as Theme) ?? "system";
+    return (localStorage.getItem("togmic-theme") ?? "system") as Theme;
   });
 
   const [systemDark, setSystemDark] = useState(

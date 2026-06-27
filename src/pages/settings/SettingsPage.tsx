@@ -231,7 +231,7 @@ export function SettingsPage({
   }, [triggerInstallDialog, updateInfo, onInstallDialogTriggered]);
 
   const changeLanguage = (lng: string) => {
-    i18n.changeLanguage(lng);
+    void i18n.changeLanguage(lng);
   };
 
   const handleStartMutedChange = useCallback(
@@ -301,7 +301,7 @@ export function SettingsPage({
         setUpdateStatus(t("updateAvailable", { version: update.version }));
         onUpdateFound?.({
           version: update.version,
-          body: update.body || undefined,
+          body: update.body ?? undefined,
           date: update.date ?? undefined,
         });
       } else {
@@ -449,7 +449,7 @@ export function SettingsPage({
                 <Switch
                   id="start-muted"
                   checked={settings.startMuted}
-                  onCheckedChange={handleStartMutedChange}
+                  onCheckedChange={(v) => { void handleStartMutedChange(v); }}
                 />
               </div>
 
@@ -468,7 +468,7 @@ export function SettingsPage({
                 <Switch
                   id="start-minimized"
                   checked={settings.startMinimized}
-                  onCheckedChange={handleStartMinimizedChange}
+                  onCheckedChange={(v) => { void handleStartMinimizedChange(v); }}
                 />
               </div>
 
@@ -484,7 +484,7 @@ export function SettingsPage({
                 <Switch
                   id="autostart"
                   checked={settings.autostart}
-                  onCheckedChange={handleAutostartChange}
+                  onCheckedChange={(v) => { void handleAutostartChange(v); }}
                 />
               </div>
 
@@ -503,7 +503,7 @@ export function SettingsPage({
                 <Switch
                   id="check-updates"
                   checked={settings.checkUpdates}
-                  onCheckedChange={handleCheckUpdatesChange}
+                  onCheckedChange={(v) => { void handleCheckUpdatesChange(v); }}
                 />
               </div>
 
@@ -522,7 +522,7 @@ export function SettingsPage({
                 <Switch
                   id="close-to-tray"
                   checked={settings.closeToTray}
-                  onCheckedChange={handleCloseToTrayChange}
+                  onCheckedChange={(v) => { void handleCloseToTrayChange(v); }}
                 />
               </div>
             </CardContent>
@@ -537,7 +537,7 @@ export function SettingsPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <Button
-                onClick={handleCheckForUpdates}
+                onClick={() => { void handleCheckForUpdates(); }}
                 disabled={isCheckingUpdate}
                 size="lg"
                 className="w-full"

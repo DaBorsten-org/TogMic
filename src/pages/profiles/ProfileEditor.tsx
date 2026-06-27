@@ -45,8 +45,8 @@ export function ProfileEditor({
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
 
-  const [name, setName] = useState(profile?.name || "");
-  const [toggleKey, setToggleKey] = useState(profile?.toggleKey || "");
+  const [name, setName] = useState(profile?.name ?? "");
+  const [toggleKey, setToggleKey] = useState(profile?.toggleKey ?? "");
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => {
     if (!profile?.deviceIds || profile.deviceIds.length === 0) {
       return defaultDeviceId;
@@ -92,7 +92,7 @@ export function ProfileEditor({
 
     try {
       const newProfile: HotkeyProfile = {
-        id: profile?.id || `profile-${Date.now()}`,
+        id: profile?.id ?? `profile-${Date.now()}`,
         name: name.trim(),
         toggleKey: toggleKey,
         deviceIds: [selectedDeviceId],
@@ -127,7 +127,7 @@ export function ProfileEditor({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">{t("profileName")}</Label>
             <Input
@@ -164,7 +164,7 @@ export function ProfileEditor({
           <div className="space-y-2">
             <Label>{t("devices")}</Label>
             <div className="relative">
-            <DropdownMenu open={dropdownOpen} onOpenChange={handleDropdownOpenChange}>
+            <DropdownMenu open={dropdownOpen} onOpenChange={(isOpen) => { void handleDropdownOpenChange(isOpen); }}>
               <DropdownMenuTrigger render={<Button type="button" variant="outline" className="w-full justify-between" />}>
                 <span className="truncate">
                   {resolveDeviceLabel(selectedDeviceId)}

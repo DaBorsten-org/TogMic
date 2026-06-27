@@ -18,7 +18,7 @@ interface ConfirmDialogProps {
   cancelText?: string;
   isDangerous?: boolean;
   showCancel?: boolean;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -39,7 +39,7 @@ export function ConfirmDialog({
   const handleConfirm = async () => {
     setIsLoading(true);
     try {
-      await onConfirm();
+      await Promise.resolve(onConfirm());
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +67,7 @@ export function ConfirmDialog({
             </Button>
           )}
           <Button
-            onClick={handleConfirm}
+            onClick={() => { void handleConfirm(); }}
             variant={isDangerous ? "destructive" : "default"}
             disabled={isLoading}
             size="lg"

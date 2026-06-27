@@ -80,7 +80,7 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
       .map((id) => {
         if (id === defaultDeviceId) return t("defaultDevice");
         if (id === allDevicesId) return t("allDevices");
-        return devices.find((d) => d.id === id)?.name || t("unknownDevice");
+        return devices.find((d) => d.id === id)?.name ?? t("unknownDevice");
       })
       .join(", ");
   }, [profile.deviceIds, devices, t]);
@@ -141,7 +141,7 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
       <CardFooter className="@container flex gap-2 pt-2 mt-auto">
         {isActive ? (
           <Button
-            onClick={handleDeactivate}
+            onClick={() => { void handleDeactivate(); }}
             variant="secondary"
             className="flex-1"
             style={{ boxShadow: "var(--shadow-btn)" }}
@@ -151,7 +151,7 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
           </Button>
         ) : (
           <Button
-            onClick={handleActivate}
+            onClick={() => { void handleActivate(); }}
             className="flex-1"
             style={{ boxShadow: "var(--shadow-btn)" }}
           >

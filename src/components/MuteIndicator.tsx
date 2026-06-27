@@ -12,7 +12,7 @@ export function MuteIndicator() {
   const disabled = !activeProfile;
 
   const handleClick = useCallback(() => {
-    if (!disabled) toggleMute();
+    if (!disabled) void toggleMute();
   }, [toggleMute, disabled]);
 
   return (
@@ -27,8 +27,8 @@ export function MuteIndicator() {
           "@media(hover:hover){hover:scale-[1.03]}",
           disabled && "opacity-40 cursor-not-allowed",
           isMuted
-            ? "bg-gradient-to-br from-muted to-muted-foreground/20"
-            : "bg-gradient-to-br from-primary/80 to-primary"
+            ? "bg-linear-to-br from-muted to-muted-foreground/20"
+            : "bg-linear-to-br from-primary/80 to-primary"
         )}
         style={{
           boxShadow: isMuted
@@ -40,7 +40,7 @@ export function MuteIndicator() {
         {!isMuted && !disabled && (
           <>
             <span
-              className="absolute inset-[-14px] rounded-full border border-dashed opacity-40 pointer-events-none"
+              className="absolute -inset-3.5 rounded-full border border-dashed opacity-40 pointer-events-none"
               style={{
                 borderColor: "var(--color-primary)",
                 animation: "tog-spin 14s linear infinite",
