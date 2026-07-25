@@ -1,13 +1,13 @@
-import { useApp } from "@/contexts/useApp";
-import { useMuteState } from "@/contexts/useMuteState";
-import { MuteIndicator } from "@/components/MuteIndicator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { MuteIndicator } from "@/components/MuteIndicator";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Separator } from "@/components/ui/separator";
+import { useApp } from "@/contexts/useApp";
+import { useMuteState } from "@/contexts/useMuteState";
+import { cn } from "@/lib/utils";
 
 const KEY_LABELS: Record<string, string> = {
   CommandOrControl: "Ctrl",
@@ -26,37 +26,54 @@ export function DashboardPage() {
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
 
-  const resolveDeviceLabel = useCallback((deviceId: string) => {
-    if (deviceId === defaultDeviceId) return t("defaultDevice");
-    if (deviceId === allDevicesId) return t("allDevices");
-    return devices.find((device) => device.id === deviceId)?.name ?? t("unknownDevice");
-  }, [devices, t]);
+  const resolveDeviceLabel = useCallback(
+    (deviceId: string) => {
+      if (deviceId === defaultDeviceId) return t("defaultDevice");
+      if (deviceId === allDevicesId) return t("allDevices");
+      return (
+        devices.find((device) => device.id === deviceId)?.name ??
+        t("unknownDevice")
+      );
+    },
+    [devices, t],
+  );
 
-  const deviceCount = useMemo(() =>
-    (activeProfile?.deviceIds.length ?? 0) > 1 || activeProfile?.deviceIds.includes(allDevicesId)
-      ? devices.length
-      : activeProfile?.deviceIds.length ?? 0,
-  [activeProfile, devices]);
+  const deviceCount = useMemo(
+    () =>
+      (activeProfile?.deviceIds.length ?? 0) > 1 ||
+      activeProfile?.deviceIds.includes(allDevicesId)
+        ? devices.length
+        : (activeProfile?.deviceIds.length ?? 0),
+    [activeProfile, devices],
+  );
 
-  const displayDeviceIds = useMemo(() =>
-    (activeProfile?.deviceIds.length ?? 0) > 1 || activeProfile?.deviceIds.includes(allDevicesId)
-      ? [allDevicesId]
-      : (activeProfile?.deviceIds ?? []),
-  [activeProfile]);
+  const displayDeviceIds = useMemo(
+    () =>
+      (activeProfile?.deviceIds.length ?? 0) > 1 ||
+      activeProfile?.deviceIds.includes(allDevicesId)
+        ? [allDevicesId]
+        : (activeProfile?.deviceIds ?? []),
+    [activeProfile],
+  );
 
   return (
     <div className="space-y-6">
       <div
         className="opacity-0 translate-y-2"
-        style={{ animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards" }}
+        style={{
+          animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards",
+        }}
       >
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
           Overview · 1 of 1
         </p>
         <h1 className="font-serif text-4xl font-normal tracking-tight text-foreground">
-          {t("dashboard")}<span className="text-primary">.</span>
+          {t("dashboard")}
+          <span className="text-primary">.</span>
         </h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t("dashboardSubtitle")}</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {t("dashboardSubtitle")}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -72,7 +89,8 @@ export function DashboardPage() {
           )}
           style={{
             boxShadow: "var(--shadow-card)",
-            animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
+            animation:
+              "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
           }}
         >
           <CardContent className="py-14">
@@ -85,7 +103,8 @@ export function DashboardPage() {
           className="border opacity-0 translate-y-2"
           style={{
             boxShadow: "var(--shadow-card)",
-            animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 120ms forwards",
+            animation:
+              "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 120ms forwards",
           }}
         >
           <CardHeader className="pb-2">
@@ -96,19 +115,28 @@ export function DashboardPage() {
           <CardContent>
             {activeProfile ? (
               <div className="space-y-4">
-                <p className="font-serif text-3xl font-normal leading-tight">{activeProfile.name}</p>
+                <p className="font-serif text-3xl font-normal leading-tight">
+                  {activeProfile.name}
+                </p>
 
                 <Separator />
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-muted-foreground shrink-0">{t("hotkey")}</span>
+                    <span className="text-sm text-muted-foreground shrink-0">
+                      {t("hotkey")}
+                    </span>
                     <KbdGroup className="flex-wrap justify-end">
                       {activeProfile.toggleKey.split("+").map((key, i, arr) => (
-                        <span key={key} className="inline-flex items-center gap-1">
+                        <span
+                          key={key}
+                          className="inline-flex items-center gap-1"
+                        >
                           <Kbd>{formatKey(key)}</Kbd>
                           {i < arr.length - 1 && (
-                            <span className="text-muted-foreground text-xs">+</span>
+                            <span className="text-muted-foreground text-xs">
+                              +
+                            </span>
                           )}
                         </span>
                       ))}
@@ -121,8 +149,12 @@ export function DashboardPage() {
                     </span>
                     <div className="flex flex-wrap gap-1 justify-end">
                       {displayDeviceIds.map((id) => (
-                        <Badge key={id} variant="secondary" className="text-xs"
-                          style={{ boxShadow: "var(--shadow-btn)" }}>
+                        <Badge
+                          key={id}
+                          variant="secondary"
+                          className="text-xs"
+                          style={{ boxShadow: "var(--shadow-btn)" }}
+                        >
                           {resolveDeviceLabel(id)}
                         </Badge>
                       ))}

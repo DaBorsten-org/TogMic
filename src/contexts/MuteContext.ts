@@ -6,4 +6,6 @@ export interface MuteContextType {
   setMute: (muted: boolean, silent?: boolean) => Promise<void>;
 }
 
-export const MuteContext = createContext<MuteContextType | undefined>(undefined);
+export const MuteContext = createContext<MuteContextType | undefined>(
+  undefined,
+);

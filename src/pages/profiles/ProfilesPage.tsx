@@ -1,7 +1,7 @@
-import { useApp } from "@/contexts/useApp";
-import { ProfileCard } from "./ProfileCard";
-import { ProfileEditor } from "./ProfileEditor";
-import type { HotkeyProfile } from "@/contexts/AppContext";
+import { Plus, RefreshCw } from "lucide-react";
+import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,10 +10,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { RefreshCw, Plus } from "lucide-react";
-import { useState, useCallback } from "react";
-import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import type { HotkeyProfile } from "@/contexts/AppContext";
+import { useApp } from "@/contexts/useApp";
+import { ProfileCard } from "./ProfileCard";
+import { ProfileEditor } from "./ProfileEditor";
 
 export function ProfilesPage() {
   const { t } = useTranslation();
@@ -51,22 +51,28 @@ export function ProfilesPage() {
     <div className="space-y-8">
       <div
         className="opacity-0 translate-y-2"
-        style={{ animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards" }}
+        style={{
+          animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards",
+        }}
       >
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
           Library · {profiles.length} total
         </p>
         <h1 className="font-serif text-4xl font-normal tracking-tight">
-          {t("profiles")}<span className="text-primary">.</span>
+          {t("profiles")}
+          <span className="text-primary">.</span>
         </h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t("profilesSubtitle")}</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {t("profilesSubtitle")}
+        </p>
       </div>
 
       <Card
         className="opacity-0 translate-y-2"
         style={{
           boxShadow: "var(--shadow-card)",
-          animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
+          animation:
+            "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
         }}
       >
         <CardHeader>
@@ -77,7 +83,9 @@ export function ProfilesPage() {
             </div>
             <div className="flex gap-3">
               <Button
-                onClick={() => { void handleRefreshDevices(); }}
+                onClick={() => {
+                  void handleRefreshDevices();
+                }}
                 variant="outline"
                 size="lg"
                 title={t("refreshAudioDevices")}

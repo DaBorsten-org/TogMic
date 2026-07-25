@@ -1,20 +1,20 @@
-import { useApp } from "@/contexts/useApp";
-import type { HotkeyProfile } from "@/contexts/AppContext";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { Play, Square, Edit, Trash2 } from "lucide-react";
-import { memo, useState, useCallback, useMemo } from "react";
+import { Edit, Play, Square, Trash2 } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Separator } from "@/components/ui/separator";
+import type { HotkeyProfile } from "@/contexts/AppContext";
+import { useApp } from "@/contexts/useApp";
+import { cn } from "@/lib/utils";
 
 interface ProfileCardProps {
   profile: HotkeyProfile;
@@ -32,9 +32,14 @@ const KEY_LABELS: Record<string, string> = {
 
 const formatKey = (key: string) => KEY_LABELS[key] ?? key;
 
-export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit }: ProfileCardProps) {
+export const ProfileCard = memo(function ProfileCard({
+  profile,
+  isActive,
+  onEdit,
+}: ProfileCardProps) {
   const { t } = useTranslation();
-  const { setActiveProfile, deactivateProfile, deleteProfile, devices } = useApp();
+  const { setActiveProfile, deactivateProfile, deleteProfile, devices } =
+    useApp();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
 
@@ -72,7 +77,10 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
   }, [deleteProfile, profile.id]);
 
   const deviceNames = useMemo(() => {
-    if (profile.deviceIds.length > 1 || profile.deviceIds.includes(allDevicesId)) {
+    if (
+      profile.deviceIds.length > 1 ||
+      profile.deviceIds.includes(allDevicesId)
+    ) {
       return t("allDevices");
     }
 
@@ -112,19 +120,25 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
             <p className="font-mono text-[9px] tracking-[0.15em] uppercase text-muted-foreground mb-1">
               {isActive ? t("activeBadge") : "Profile"}
             </p>
-            <CardTitle className="font-serif text-2xl font-normal leading-tight">{profile.name}</CardTitle>
+            <CardTitle className="font-serif text-2xl font-normal leading-tight">
+              {profile.name}
+            </CardTitle>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3 flex-1">
         <div className="flex items-center justify-between">
-          <p className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted-foreground">{t("hotkey")}</p>
+          <p className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted-foreground">
+            {t("hotkey")}
+          </p>
           <KbdGroup className="flex-wrap justify-end">
             {profile.toggleKey.split("+").map((key, i, arr) => (
               <span key={key} className="inline-flex items-center gap-1">
                 <Kbd>{formatKey(key)}</Kbd>
-                {i < arr.length - 1 && <span className="text-muted-foreground text-xs">+</span>}
+                {i < arr.length - 1 && (
+                  <span className="text-muted-foreground text-xs">+</span>
+                )}
               </span>
             ))}
           </KbdGroup>
@@ -133,7 +147,9 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
         <Separator />
 
         <div className="flex items-center justify-between gap-2">
-          <p className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted-foreground shrink-0">{t("devices")}</p>
+          <p className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted-foreground shrink-0">
+            {t("devices")}
+          </p>
           <p className="text-xs text-right">{deviceNames}</p>
         </div>
       </CardContent>
@@ -141,7 +157,9 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
       <CardFooter className="@container flex gap-2 pt-2 mt-auto">
         {isActive ? (
           <Button
-            onClick={() => { void handleDeactivate(); }}
+            onClick={() => {
+              void handleDeactivate();
+            }}
             variant="secondary"
             className="flex-1"
             style={{ boxShadow: "var(--shadow-btn)" }}
@@ -151,7 +169,9 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
           </Button>
         ) : (
           <Button
-            onClick={() => { void handleActivate(); }}
+            onClick={() => {
+              void handleActivate();
+            }}
             className="flex-1"
             style={{ boxShadow: "var(--shadow-btn)" }}
           >
@@ -159,10 +179,21 @@ export const ProfileCard = memo(function ProfileCard({ profile, isActive, onEdit
             <span className="hidden @[14rem]:inline">{t("activate")}</span>
           </Button>
         )}
-        <Button onClick={onEdit} variant="outline" size="icon" style={{ boxShadow: "var(--shadow-btn)" }}>
+        <Button
+          onClick={onEdit}
+          variant="outline"
+          size="icon"
+          style={{ boxShadow: "var(--shadow-btn)" }}
+        >
           <Edit className="h-4 w-4" />
         </Button>
-        <Button onClick={handleDelete} variant="destructive" size="icon" className="border border-destructive/60" style={{ boxShadow: "var(--shadow-btn)" }}>
+        <Button
+          onClick={handleDelete}
+          variant="destructive"
+          size="icon"
+          className="border border-destructive/60"
+          style={{ boxShadow: "var(--shadow-btn)" }}
+        >
           <Trash2 className="h-4 w-4" />
         </Button>
       </CardFooter>

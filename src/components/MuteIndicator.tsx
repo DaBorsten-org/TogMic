@@ -1,9 +1,9 @@
-import { useApp } from '@/contexts/useApp';
-import { useMuteState } from '@/contexts/useMuteState';
-import { cn } from '@/lib/utils';
-import { Mic, MicOff } from 'lucide-react';
-import { useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Mic, MicOff } from "lucide-react";
+import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { useApp } from "@/contexts/useApp";
+import { useMuteState } from "@/contexts/useMuteState";
+import { cn } from "@/lib/utils";
 
 export function MuteIndicator() {
   const { t } = useTranslation();
@@ -28,7 +28,7 @@ export function MuteIndicator() {
           disabled && "opacity-40 cursor-not-allowed",
           isMuted
             ? "bg-linear-to-br from-muted to-muted-foreground/20"
-            : "bg-linear-to-br from-primary/80 to-primary"
+            : "bg-linear-to-br from-primary/80 to-primary",
         )}
         style={{
           boxShadow: isMuted
@@ -49,7 +49,8 @@ export function MuteIndicator() {
             <span
               className="absolute inset-0 rounded-full pointer-events-none"
               style={{
-                border: "2px solid color-mix(in oklch, var(--color-primary) 60%, transparent)",
+                border:
+                  "2px solid color-mix(in oklch, var(--color-primary) 60%, transparent)",
                 animation: "tog-sonar 2s cubic-bezier(0.23,1,0.32,1) infinite",
               }}
             />
@@ -59,21 +60,21 @@ export function MuteIndicator() {
         <div
           className={cn(
             "relative flex flex-col items-center gap-2 transition-[color,opacity] duration-200",
-            isMuted ? "text-muted-foreground" : "text-white"
+            isMuted ? "text-muted-foreground" : "text-white",
           )}
         >
           <span className="relative size-10 flex items-center justify-center">
             <MicOff
               className={cn(
                 "absolute size-10 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                isMuted ? "opacity-100 scale-100" : "opacity-0 scale-90"
+                isMuted ? "opacity-100 scale-100" : "opacity-0 scale-90",
               )}
               strokeWidth={1.6}
             />
             <Mic
               className={cn(
                 "absolute size-10 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                isMuted ? "opacity-0 scale-90" : "opacity-100 scale-100"
+                isMuted ? "opacity-0 scale-90" : "opacity-100 scale-100",
               )}
               strokeWidth={1.6}
             />

@@ -6,4 +6,6 @@ export interface SettingsContextType {
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
 }
 
-export const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+export const SettingsContext = createContext<SettingsContextType | undefined>(
+  undefined,
+);

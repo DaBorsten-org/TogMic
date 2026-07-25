@@ -1,9 +1,11 @@
-import { useTranslation } from "react-i18next";
-import { useTheme } from "@/components/theme-context";
-import { useSettings } from "@/contexts/useSettings";
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
+import { Download } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useTheme } from "@/components/theme-context";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,13 +13,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Download } from "lucide-react";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSettings } from "@/contexts/useSettings";
+import { cn } from "@/lib/utils";
 
 function ThemePreview({ value }: { value: "light" | "dark" | "system" }) {
   if (value === "light")
@@ -336,7 +336,9 @@ export function SettingsPage({
     <div className="space-y-8 max-w-3xl">
       <div
         className="opacity-0 translate-y-2"
-        style={{ animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards" }}
+        style={{
+          animation: "tog-enter 280ms cubic-bezier(0.23,1,0.32,1) forwards",
+        }}
       >
         <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-1">
           Preferences
@@ -352,274 +354,292 @@ export function SettingsPage({
 
       <div
         className="opacity-0 translate-y-2"
-        style={{ animation: "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards" }}
+        style={{
+          animation:
+            "tog-enter 320ms cubic-bezier(0.23,1,0.32,1) 60ms forwards",
+        }}
       >
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full">
-          <TabsTrigger value="appearance" className="flex-1">
-            {t("appearance")}
-          </TabsTrigger>
-          <TabsTrigger value="behavior" className="flex-1">
-            {t("behavior")}
-          </TabsTrigger>
-          <TabsTrigger value="updates" className="flex-1">
-            {t("updates")}
-          </TabsTrigger>
-        </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full">
+            <TabsTrigger value="appearance" className="flex-1">
+              {t("appearance")}
+            </TabsTrigger>
+            <TabsTrigger value="behavior" className="flex-1">
+              {t("behavior")}
+            </TabsTrigger>
+            <TabsTrigger value="updates" className="flex-1">
+              {t("updates")}
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="appearance" className="space-y-6 mt-6">
-          <Card style={{ boxShadow: "var(--shadow-card)" }}>
-            <CardHeader>
-              <CardTitle>{t("theme")}</CardTitle>
-              <CardDescription>{t("appearanceDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-3">
-                {(["light", "dark", "system"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setTheme(value)}
-                    className={cn(
-                      "flex-1 flex flex-col items-center gap-2 rounded-xl border-2 p-1.5 pb-2.5",
-                      "transition-[border-color,transform,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                      "hover:scale-[1.015] active:scale-[0.985]",
-                      theme === value
-                        ? "border-primary shadow-sm scale-[1.015]"
-                        : "border-border hover:border-muted-foreground/50",
-                    )}
-                  >
-                    <div className="w-full overflow-hidden rounded-lg">
-                      <ThemePreview value={value} />
-                    </div>
-                    <span className="text-xs font-medium">{t(value)}</span>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card style={{ boxShadow: "var(--shadow-card)" }}>
-            <CardHeader>
-              <CardTitle>{t("language")}</CardTitle>
-              <CardDescription>{t("languageDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => changeLanguage("en")}
-                  variant={i18n.language === "en" ? "default" : "outline"}
-                  size="lg"
-                  className="flex-1"
-                >
-                  {t("langEnglish")}
-                </Button>
-                <Button
-                  onClick={() => changeLanguage("de")}
-                  variant={i18n.language === "de" ? "default" : "outline"}
-                  size="lg"
-                  className="flex-1"
-                >
-                  {t("langGerman")}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="behavior" className="mt-6">
-          <Card style={{ boxShadow: "var(--shadow-card)" }}>
-            <CardHeader>
-              <CardTitle>{t("appBehavior")}</CardTitle>
-              <CardDescription>{t("appBehaviorDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1 px-6">
-              <div className="flex items-center justify-between py-4 border-b">
-                <div className="space-y-0.5">
-                  <Label
-                    htmlFor="start-muted"
-                    className="text-base font-medium"
-                  >
-                    {t("startMuted")}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t("startMutedDesc")}
-                  </p>
-                </div>
-                <Switch
-                  id="start-muted"
-                  checked={settings.startMuted}
-                  onCheckedChange={(v) => { void handleStartMutedChange(v); }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-4 border-b">
-                <div className="space-y-0.5">
-                  <Label
-                    htmlFor="start-minimized"
-                    className="text-base font-medium"
-                  >
-                    {t("startMinimized")}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t("startMinimizedDesc")}
-                  </p>
-                </div>
-                <Switch
-                  id="start-minimized"
-                  checked={settings.startMinimized}
-                  onCheckedChange={(v) => { void handleStartMinimizedChange(v); }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-4 border-b">
-                <div className="space-y-0.5">
-                  <Label htmlFor="autostart" className="text-base font-medium">
-                    {t("startWithWindows")}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t("startWithWindowsDesc")}
-                  </p>
-                </div>
-                <Switch
-                  id="autostart"
-                  checked={settings.autostart}
-                  onCheckedChange={(v) => { void handleAutostartChange(v); }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-4 border-b">
-                <div className="space-y-0.5">
-                  <Label
-                    htmlFor="check-updates"
-                    className="text-base font-medium"
-                  >
-                    {t("checkForUpdates")}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t("checkForUpdatesDesc")}
-                  </p>
-                </div>
-                <Switch
-                  id="check-updates"
-                  checked={settings.checkUpdates}
-                  onCheckedChange={(v) => { void handleCheckUpdatesChange(v); }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-4">
-                <div className="space-y-0.5">
-                  <Label
-                    htmlFor="close-to-tray"
-                    className="text-base font-medium"
-                  >
-                    {t("closeToTray")}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t("closeToTrayDescription")}
-                  </p>
-                </div>
-                <Switch
-                  id="close-to-tray"
-                  checked={settings.closeToTray}
-                  onCheckedChange={(v) => { void handleCloseToTrayChange(v); }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="updates" className="mt-6 space-y-4">
-          <Card style={{ boxShadow: "var(--shadow-card)" }}>
-            <CardHeader>
-              <CardTitle>{t("updates")}</CardTitle>
-              <CardDescription>{t("updatesDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button
-                onClick={() => { void handleCheckForUpdates(); }}
-                disabled={isCheckingUpdate}
-                size="lg"
-                className="w-full"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                {isCheckingUpdate ? t("checking") : t("checkForUpdates")}
-              </Button>
-              {updateStatus && (
-                <p className="text-sm text-muted-foreground text-center">
-                  {updateStatus}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {updateInfo && (
-            <Card className="border-primary/40">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-base">
-                      {t("updateAvailable", { version: updateInfo.version })}
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      {updateInfo.date
-                        ? new Date(updateInfo.date).toLocaleString(
-                            i18n.language,
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )
-                        : t("releaseNotes")}
-                    </CardDescription>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => setShowUpdateDialog(true)}
-                    className="shrink-0"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    {t("update")}
-                  </Button>
-                </div>
+          <TabsContent value="appearance" className="space-y-6 mt-6">
+            <Card style={{ boxShadow: "var(--shadow-card)" }}>
+              <CardHeader>
+                <CardTitle>{t("theme")}</CardTitle>
+                <CardDescription>{t("appearanceDesc")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                  {t("releaseNotes")}
-                </p>
-                <div className="max-h-52 overflow-y-auto rounded-md border border-muted bg-muted/50 p-3 text-sm whitespace-pre-wrap">
-                  {updateInfo.body}
+                <div className="flex gap-3">
+                  {(["light", "dark", "system"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTheme(value)}
+                      className={cn(
+                        "flex-1 flex flex-col items-center gap-2 rounded-xl border-2 p-1.5 pb-2.5",
+                        "transition-[border-color,transform,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                        "hover:scale-[1.015] active:scale-[0.985]",
+                        theme === value
+                          ? "border-primary shadow-sm scale-[1.015]"
+                          : "border-border hover:border-muted-foreground/50",
+                      )}
+                    >
+                      <div className="w-full overflow-hidden rounded-lg">
+                        <ThemePreview value={value} />
+                      </div>
+                      <span className="text-xs font-medium">{t(value)}</span>
+                    </button>
+                  ))}
                 </div>
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
-      </Tabs>
 
-      <ConfirmDialog
-        open={errorMessage !== null}
-        title={t("error")}
-        description={errorMessage ?? ""}
-        confirmText={t("ok")}
-        showCancel={false}
-        onConfirm={() => setErrorMessage(null)}
-        onCancel={() => setErrorMessage(null)}
-      />
+            <Card style={{ boxShadow: "var(--shadow-card)" }}>
+              <CardHeader>
+                <CardTitle>{t("language")}</CardTitle>
+                <CardDescription>{t("languageDesc")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => changeLanguage("en")}
+                    variant={i18n.language === "en" ? "default" : "outline"}
+                    size="lg"
+                    className="flex-1"
+                  >
+                    {t("langEnglish")}
+                  </Button>
+                  <Button
+                    onClick={() => changeLanguage("de")}
+                    variant={i18n.language === "de" ? "default" : "outline"}
+                    size="lg"
+                    className="flex-1"
+                  >
+                    {t("langGerman")}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-      {updateInfo && (
+          <TabsContent value="behavior" className="mt-6">
+            <Card style={{ boxShadow: "var(--shadow-card)" }}>
+              <CardHeader>
+                <CardTitle>{t("appBehavior")}</CardTitle>
+                <CardDescription>{t("appBehaviorDesc")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1 px-6">
+                <div className="flex items-center justify-between py-4 border-b">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="start-muted"
+                      className="text-base font-medium"
+                    >
+                      {t("startMuted")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t("startMutedDesc")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="start-muted"
+                    checked={settings.startMuted}
+                    onCheckedChange={(v) => {
+                      void handleStartMutedChange(v);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-4 border-b">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="start-minimized"
+                      className="text-base font-medium"
+                    >
+                      {t("startMinimized")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t("startMinimizedDesc")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="start-minimized"
+                    checked={settings.startMinimized}
+                    onCheckedChange={(v) => {
+                      void handleStartMinimizedChange(v);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-4 border-b">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="autostart"
+                      className="text-base font-medium"
+                    >
+                      {t("startWithWindows")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t("startWithWindowsDesc")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="autostart"
+                    checked={settings.autostart}
+                    onCheckedChange={(v) => {
+                      void handleAutostartChange(v);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-4 border-b">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="check-updates"
+                      className="text-base font-medium"
+                    >
+                      {t("checkForUpdates")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t("checkForUpdatesDesc")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="check-updates"
+                    checked={settings.checkUpdates}
+                    onCheckedChange={(v) => {
+                      void handleCheckUpdatesChange(v);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-4">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="close-to-tray"
+                      className="text-base font-medium"
+                    >
+                      {t("closeToTray")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t("closeToTrayDescription")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="close-to-tray"
+                    checked={settings.closeToTray}
+                    onCheckedChange={(v) => {
+                      void handleCloseToTrayChange(v);
+                    }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="updates" className="mt-6 space-y-4">
+            <Card style={{ boxShadow: "var(--shadow-card)" }}>
+              <CardHeader>
+                <CardTitle>{t("updates")}</CardTitle>
+                <CardDescription>{t("updatesDesc")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  onClick={() => {
+                    void handleCheckForUpdates();
+                  }}
+                  disabled={isCheckingUpdate}
+                  size="lg"
+                  className="w-full"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {isCheckingUpdate ? t("checking") : t("checkForUpdates")}
+                </Button>
+                {updateStatus && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    {updateStatus}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {updateInfo && (
+              <Card className="border-primary/40">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-base">
+                        {t("updateAvailable", { version: updateInfo.version })}
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        {updateInfo.date
+                          ? new Date(updateInfo.date).toLocaleString(
+                              i18n.language,
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )
+                          : t("releaseNotes")}
+                      </CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowUpdateDialog(true)}
+                      className="shrink-0"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {t("update")}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs font-medium text-muted-foreground uppercase mb-2">
+                    {t("releaseNotes")}
+                  </p>
+                  <div className="max-h-52 overflow-y-auto rounded-md border border-muted bg-muted/50 p-3 text-sm whitespace-pre-wrap">
+                    {updateInfo.body}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+
         <ConfirmDialog
-          open={showUpdateDialog}
-          title={t("updateToVersion", { version: updateInfo.version })}
-          description={t("updateConfirmDesc")}
-          confirmText={t("update")}
-          cancelText={t("cancel")}
-          onConfirm={handleConfirmUpdate}
-          onCancel={() => setShowUpdateDialog(false)}
+          open={errorMessage !== null}
+          title={t("error")}
+          description={errorMessage ?? ""}
+          confirmText={t("ok")}
+          showCancel={false}
+          onConfirm={() => setErrorMessage(null)}
+          onCancel={() => setErrorMessage(null)}
         />
-      )}
+
+        {updateInfo && (
+          <ConfirmDialog
+            open={showUpdateDialog}
+            title={t("updateToVersion", { version: updateInfo.version })}
+            description={t("updateConfirmDesc")}
+            confirmText={t("update")}
+            cancelText={t("cancel")}
+            onConfirm={handleConfirmUpdate}
+            onCancel={() => setShowUpdateDialog(false)}
+          />
+        )}
       </div>
     </div>
   );

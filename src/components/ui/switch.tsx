@@ -1,13 +1,13 @@
-import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
+import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Switch({
   className,
   size = "default",
   ...props
 }: SwitchPrimitive.Root.Props & {
-  size?: "sm" | "default"
+  size?: "sm" | "default";
 }) {
   return (
     <SwitchPrimitive.Root
@@ -35,7 +35,7 @@ function Switch({
         // Transition
         "transition-[background-color,box-shadow] duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]",
         "active:scale-[0.96]",
-        className
+        className,
       )}
       {...props}
     >
@@ -62,7 +62,7 @@ function Switch({
         )}
       />
     </SwitchPrimitive.Root>
-  )
+  );
 }
 
-export { Switch }
+export { Switch };

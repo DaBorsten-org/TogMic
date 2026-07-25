@@ -1,18 +1,16 @@
-import { useState, useCallback } from "react";
-import { useApp } from "@/contexts/useApp";
-import type { HotkeyProfile } from "@/contexts/AppContext";
+import { ChevronDown } from "lucide-react";
+import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { HotkeyInput } from "@/components/HotkeyInput";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,9 +20,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useTranslation } from "react-i18next";
+import type { HotkeyProfile } from "@/contexts/AppContext";
+import { useApp } from "@/contexts/useApp";
 
 interface ProfileEditorProps {
   profile?: HotkeyProfile | null;
@@ -64,54 +64,72 @@ export function ProfileEditor({
   const [error, setError] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const resolveDeviceLabel = useCallback((deviceId: string) => {
-    if (deviceId === defaultDeviceId) return t("defaultDevice");
-    if (deviceId === allDevicesId) return t("allDevices");
-    const device = devices.find((entry) => entry.id === deviceId);
-    return device?.name ?? t("unknownDevice");
-  }, [devices, t]);
+  const resolveDeviceLabel = useCallback(
+    (deviceId: string) => {
+      if (deviceId === defaultDeviceId) return t("defaultDevice");
+      if (deviceId === allDevicesId) return t("allDevices");
+      const device = devices.find((entry) => entry.id === deviceId);
+      return device?.name ?? t("unknownDevice");
+    },
+    [devices, t],
+  );
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError("");
 
-    if (!name.trim()) {
-      setError(t("profileNameRequired"));
-      return;
-    }
+      if (!name.trim()) {
+        setError(t("profileNameRequired"));
+        return;
+      }
 
-    if (!toggleKey) {
-      setError(t("hotkeyRequired"));
-      return;
-    }
+      if (!toggleKey) {
+        setError(t("hotkeyRequired"));
+        return;
+      }
 
-    if (!selectedDeviceId) {
-      setError(t("deviceRequired"));
-      return;
-    }
+      if (!selectedDeviceId) {
+        setError(t("deviceRequired"));
+        return;
+      }
 
-    try {
-      const newProfile: HotkeyProfile = {
-        id: profile?.id ?? `profile-${Date.now()}`,
-        name: name.trim(),
-        toggleKey: toggleKey,
-        deviceIds: [selectedDeviceId],
-        ignoreModifiers,
-      };
+      try {
+        const newProfile: HotkeyProfile = {
+          id: profile?.id ?? `profile-${Date.now()}`,
+          name: name.trim(),
+          toggleKey: toggleKey,
+          deviceIds: [selectedDeviceId],
+          ignoreModifiers,
+        };
 
-      await saveProfile(newProfile);
-      onSave();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("failedToSave"));
-    }
-  }, [name, toggleKey, selectedDeviceId, ignoreModifiers, profile, saveProfile, onSave, t]);
+        await saveProfile(newProfile);
+        onSave();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t("failedToSave"));
+      }
+    },
+    [
+      name,
+      toggleKey,
+      selectedDeviceId,
+      ignoreModifiers,
+      profile,
+      saveProfile,
+      onSave,
+      t,
+    ],
+  );
 
-  const handleDropdownOpenChange = useCallback(async (isOpen: boolean) => {
-    setDropdownOpen(isOpen);
-    if (isOpen) {
-      await refreshDevices();
-    }
-  }, [refreshDevices]);
+  const handleDropdownOpenChange = useCallback(
+    async (isOpen: boolean) => {
+      setDropdownOpen(isOpen);
+      if (isOpen) {
+        await refreshDevices();
+      }
+    },
+    [refreshDevices],
+  );
 
   const handleDeviceSelect = useCallback((value: string) => {
     setSelectedDeviceId(value);
@@ -127,7 +145,12 @@ export function ProfileEditor({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+          className="space-y-4"
+        >
           <div className="space-y-2">
             <Label htmlFor="name">{t("profileName")}</Label>
             <Input
@@ -164,46 +187,62 @@ export function ProfileEditor({
           <div className="space-y-2">
             <Label>{t("devices")}</Label>
             <div className="relative">
-            <DropdownMenu open={dropdownOpen} onOpenChange={(isOpen) => { void handleDropdownOpenChange(isOpen); }}>
-              <DropdownMenuTrigger render={<Button type="button" variant="outline" className="w-full justify-between" />}>
-                <span className="truncate">
-                  {resolveDeviceLabel(selectedDeviceId)}
-                </span>
-                <ChevronDown className="h-4 w-4 opacity-70" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-64">
-                <DropdownMenuRadioGroup
-                  value={selectedDeviceId}
-                  onValueChange={handleDeviceSelect}
+              <DropdownMenu
+                open={dropdownOpen}
+                onOpenChange={(isOpen) => {
+                  void handleDropdownOpenChange(isOpen);
+                }}
+              >
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                    />
+                  }
                 >
-                  <DropdownMenuRadioItem value={defaultDeviceId}>
-                    {t("defaultDevice")}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value={allDevicesId}>
-                    {t("allDevices")}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuSeparator />
-                  {devices.length === 0 ? (
-                    <DropdownMenuItem disabled>
-                      {t("noAudioDevices")}
-                    </DropdownMenuItem>
-                  ) : (
-                    devices.map((device) => (
-                      <DropdownMenuRadioItem key={device.id} value={device.id}>
-                        <span className="flex items-center gap-2">
-                          {device.name}
-                          {device.isDefault && (
-                            <Badge variant="secondary">
-                              {t("defaultDevice")}
-                            </Badge>
-                          )}
-                        </span>
-                      </DropdownMenuRadioItem>
-                    ))
-                  )}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <span className="truncate">
+                    {resolveDeviceLabel(selectedDeviceId)}
+                  </span>
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="max-h-64">
+                  <DropdownMenuRadioGroup
+                    value={selectedDeviceId}
+                    onValueChange={handleDeviceSelect}
+                  >
+                    <DropdownMenuRadioItem value={defaultDeviceId}>
+                      {t("defaultDevice")}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value={allDevicesId}>
+                      {t("allDevices")}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuSeparator />
+                    {devices.length === 0 ? (
+                      <DropdownMenuItem disabled>
+                        {t("noAudioDevices")}
+                      </DropdownMenuItem>
+                    ) : (
+                      devices.map((device) => (
+                        <DropdownMenuRadioItem
+                          key={device.id}
+                          value={device.id}
+                        >
+                          <span className="flex items-center gap-2">
+                            {device.name}
+                            {device.isDefault && (
+                              <Badge variant="secondary">
+                                {t("defaultDevice")}
+                              </Badge>
+                            )}
+                          </span>
+                        </DropdownMenuRadioItem>
+                      ))
+                    )}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

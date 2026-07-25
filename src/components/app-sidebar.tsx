@@ -1,35 +1,38 @@
 "use client";
 
+import { getVersion } from "@tauri-apps/api/app";
+import {
+  LayoutDashboardIcon,
+  MicIcon,
+  SettingsIcon,
+  User2Icon,
+} from "lucide-react";
 import * as React from "react";
 import { useEffect, useState } from "react";
-import { getVersion } from "@tauri-apps/api/app";
+import { useTranslation } from "react-i18next";
 import type { Page } from "@/components/app-wrapper";
-
 import {
   Sidebar,
   SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
 } from "@/components/ui/sidebar";
-import {
-  MicIcon,
-  SettingsIcon,
-  LayoutDashboardIcon,
-  User2Icon,
-} from "lucide-react";
-import { useTranslation } from "react-i18next";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   currentPage: Page;
   onNavigate: (page: Page) => void;
 }
 
-export function AppSidebar({ currentPage, onNavigate, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  currentPage,
+  onNavigate,
+  ...props
+}: AppSidebarProps) {
   const { t } = useTranslation();
   const [version, setVersion] = useState<string>("");
 
@@ -64,14 +67,19 @@ export function AppSidebar({ currentPage, onNavigate, ...props }: AppSidebarProp
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" onClick={() => onNavigate("dashboard")}>
+            <SidebarMenuButton
+              size="lg"
+              onClick={() => onNavigate("dashboard")}
+            >
               <div className="bg-sidebar-primary text-sidebar-primary-foreground dark:bg-white dark:text-neutral-900 flex aspect-square size-8 items-center justify-center rounded-lg">
                 <MicIcon className="size-4" />
               </div>
               <div className="grid flex-1 text-start text-sm leading-tight">
                 <span className="truncate font-semibold">TogMic</span>
                 {version && (
-                  <span className="truncate text-xs text-muted-foreground">v{version}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    v{version}
+                  </span>
                 )}
               </div>
             </SidebarMenuButton>

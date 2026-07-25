@@ -1,13 +1,13 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -67,7 +67,9 @@ export function ConfirmDialog({
             </Button>
           )}
           <Button
-            onClick={() => { void handleConfirm(); }}
+            onClick={() => {
+              void handleConfirm();
+            }}
             variant={isDangerous ? "destructive" : "default"}
             disabled={isLoading}
             size="lg"

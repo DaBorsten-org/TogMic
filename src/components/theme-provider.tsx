@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ThemeContext, type Theme } from "@/components/theme-context";
+import { useEffect, useState } from "react";
+import { type Theme, ThemeContext } from "@/components/theme-context";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {

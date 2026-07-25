@@ -1,19 +1,18 @@
-import { useState, useCallback, useContext } from "react";
+import { useCallback, useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/app-sidebar";
-import { DashboardPage } from "@/pages/dashboard/DashboardPage";
-import { ProfilesPage } from "@/pages/profiles/ProfilesPage";
-import { SettingsPage } from "@/pages/settings/SettingsPage";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppProvider } from "@/contexts/AppContent";
-
-import { MuteContext } from "@/contexts/MuteContext";
 import { AppContext } from "@/contexts/AppContext";
+import { MuteContext } from "@/contexts/MuteContext";
 import { cn } from "@/lib/utils";
+import { DashboardPage } from "@/pages/dashboard/DashboardPage";
+import { ProfilesPage } from "@/pages/profiles/ProfilesPage";
+import { SettingsPage } from "@/pages/settings/SettingsPage";
 
 export type Page = "dashboard" | "profiles" | "settings";
 
@@ -28,7 +27,9 @@ function HeaderMuteChip() {
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => { void toggleMute(); }}
+        onClick={() => {
+          void toggleMute();
+        }}
         className={cn(
           "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-mono font-semibold tracking-widest uppercase transition-all duration-150 cursor-pointer",
           "active:translate-y-px",

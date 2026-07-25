@@ -1,8 +1,9 @@
+import { ChevronRightIcon } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+} from "@/components/ui/collapsible";
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -13,38 +14,47 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from "@/components/ui/sidebar"
-import { ChevronRightIcon } from "lucide-react"
+} from "@/components/ui/sidebar";
 
 export function NavMain({
   items,
 }: {
   items: {
-    title: string
-    url: string
-    icon: React.ReactNode
-    isActive?: boolean
+    title: string;
+    url: string;
+    icon: React.ReactNode;
+    isActive?: boolean;
     items?: {
-      title: string
-      url: string
-    }[]
-  }[]
+      title: string;
+      url: string;
+    }[];
+  }[];
 }) {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
-          <Collapsible key={item.title} render={<SidebarMenuItem />} defaultOpen={item.isActive}>
-            <SidebarMenuButton render={<a href={item.url} />} tooltip={item.title}>
+          <Collapsible
+            key={item.title}
+            render={<SidebarMenuItem />}
+            defaultOpen={item.isActive}
+          >
+            <SidebarMenuButton
+              render={<a href={item.url} />}
+              tooltip={item.title}
+            >
               {item.icon}
               <span>{item.title}</span>
             </SidebarMenuButton>
             {item.items?.length ? (
               <>
-                <CollapsibleTrigger render={<SidebarMenuAction className="data-[state=open]:rotate-90" />}>
-                  <ChevronRightIcon
-                  />
+                <CollapsibleTrigger
+                  render={
+                    <SidebarMenuAction className="data-[state=open]:rotate-90" />
+                  }
+                >
+                  <ChevronRightIcon />
                   <span className="sr-only">Toggle</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -64,5 +74,5 @@ export function NavMain({
         ))}
       </SidebarMenu>
     </SidebarGroup>
-  )
+  );
 }

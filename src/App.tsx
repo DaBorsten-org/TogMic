@@ -1,7 +1,7 @@
 import { AppWrapper } from "@/components/app-wrapper";
-import RootLayout from "./layout";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import RootLayout from "./layout";
 
 export function App() {
   return (

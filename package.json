@@ -1,7 +1,7 @@
 {
   "name": "togmic",
   "private": true,
-  "version": "0.3.6",
+  "version": "0.3.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "bump": "bun scripts/bump.ts",
     "lint": "biome lint src/",
+    "format": "biome check --write src/",
     "test": "vitest"
   },
   "dependencies": {
