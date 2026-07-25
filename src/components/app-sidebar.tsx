@@ -34,7 +34,11 @@ export function AppSidebar({ currentPage, onNavigate, ...props }: AppSidebarProp
   const [version, setVersion] = useState<string>("");
 
   useEffect(() => {
-    getVersion().then(setVersion).catch(() => {});
+    getVersion()
+      .then(setVersion)
+      .catch(() => {
+        // ponytail: version is cosmetic, ignore failures
+      });
   }, []);
 
   const menuItems = [

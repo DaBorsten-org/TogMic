@@ -10,7 +10,9 @@ export interface ThemeContextValue {
 
 export const ThemeContext = createContext<ThemeContextValue>({
   theme: "system",
-  setTheme: () => {},
+  setTheme: () => {
+    // ponytail: default no-op, real setter comes from ThemeProvider
+  },
   resolvedTheme: "light",
 });
 

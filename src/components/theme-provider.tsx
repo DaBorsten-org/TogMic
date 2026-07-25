@@ -32,7 +32,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Pass the raw theme so "system" maps to `None` natively and the window
     // keeps following the OS — pinning it to a concrete value freezes the
     // webview's prefers-color-scheme and breaks live OS theme changes.
-    invoke("set_window_theme", { theme }).catch(() => {});
+    invoke("set_window_theme", { theme }).catch(() => {
+      // ponytail: window theme sync is best-effort
+    });
   }, [resolvedTheme, theme]);
 
   function setTheme(t: Theme) {

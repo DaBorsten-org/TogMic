@@ -54,10 +54,10 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
     settingsRef.current = settings;
   });
 
-  const getStore = async () => {
+  const getStore = useCallback(async () => {
     storeRef.current ??= await load("config.json", { autoSave: false, defaults: {} });
     return storeRef.current;
-  };
+  }, []);
 
   // Sync tray menu labels whenever language changes
   useEffect(() => {
@@ -115,7 +115,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to load config:", error);
       setConfigLoaded(true);
     }
-  }, []);
+  }, [getStore]);
 
   // Save config to store — stable callback that reads from refs
   const saveConfig = useCallback(async (updatedConfig: Partial<Config>) => {
@@ -134,7 +134,7 @@ export function AppProvider({ children, onNavigateToUpdates, onRequestInstall }:
       console.error("Failed to save config:", error);
       throw error;
     }
-  }, []);
+  }, [getStore]);
 
   // Refresh devices list
   const refreshDevices = useCallback(async () => {
