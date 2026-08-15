@@ -19,6 +19,8 @@ pub use macos::MacOSAudioController as PlatformAudioController;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
+pub use linux::start_audio_listeners;
+#[cfg(target_os = "linux")]
 pub use linux::LinuxAudioController as PlatformAudioController;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

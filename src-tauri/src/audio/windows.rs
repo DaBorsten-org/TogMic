@@ -10,8 +10,8 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Media::Audio::Endpoints::{
     IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
 };
-use windows::Win32::Media::Audio::{AUDIO_VOLUME_NOTIFICATION_DATA, IMMDeviceEnumerator};
 use windows::Win32::Media::Audio::*;
+use windows::Win32::Media::Audio::{IMMDeviceEnumerator, AUDIO_VOLUME_NOTIFICATION_DATA};
 use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToStringAlloc};
 use windows::Win32::System::Com::*;
 use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, PROPERTYKEY};
@@ -386,10 +386,7 @@ impl Drop for AudioListenerHandles {
 /// The `on_devices_changed` closure is called when the device list changes.
 ///
 /// Returns immediately; the listener thread runs for the lifetime of the process.
-pub fn start_audio_listeners(
-    on_mute_changed: MuteChangedFn,
-    on_devices_changed: DevicesChangedFn,
-) {
+pub fn start_audio_listeners(on_mute_changed: MuteChangedFn, on_devices_changed: DevicesChangedFn) {
     std::thread::spawn(move || {
         // STA is required for IMMNotificationClient callbacks on Windows
         unsafe {
@@ -442,15 +439,14 @@ fn setup_listeners(
         // Use thread_enumerator() so the STA thread's THREAD_ENUMERATOR cache is populated.
         // This means enumerate_capture_device_ids() called from on_devices_changed callbacks
         // (on this same thread) reuses the cached enumerator instead of creating a second one.
-        let enumerator = thread_enumerator()
-            .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+        let enumerator =
+            thread_enumerator().map_err(|e| format!("CoCreateInstance failed: {}", e))?;
 
         // Register device notification client
-        let notification_client: IMMNotificationClient =
-            DeviceNotificationClient {
-                on_devices_changed: on_devices_changed.clone(),
-            }
-            .into();
+        let notification_client: IMMNotificationClient = DeviceNotificationClient {
+            on_devices_changed: on_devices_changed.clone(),
+        }
+        .into();
         enumerator
             .RegisterEndpointNotificationCallback(&notification_client)
             .map_err(|e| format!("RegisterEndpointNotificationCallback failed: {}", e))?;

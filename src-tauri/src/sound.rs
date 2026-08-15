@@ -1,9 +1,9 @@
+use once_cell::sync::OnceCell;
+use rodio::cpal::traits::{DeviceTrait, HostTrait};
 use std::fs;
 use std::io::Cursor;
 use std::sync::mpsc;
 use std::time::Duration;
-use once_cell::sync::OnceCell;
-use rodio::cpal::traits::{DeviceTrait, HostTrait};
 
 // Release audio stream after this many seconds of silence so Bluetooth devices
 // can go idle and other audio sources (e.g. phone music) can take over.
@@ -52,7 +52,8 @@ pub fn init() {
                     let current_device = default_device_name().unwrap_or_default();
 
                     // Reinitialize stream only if device changed or not yet initialized
-                    let needs_reinit = stream_state.as_ref()
+                    let needs_reinit = stream_state
+                        .as_ref()
                         .map(|(_, _, name)| name != &current_device)
                         .unwrap_or(true);
 
@@ -64,7 +65,9 @@ pub fn init() {
                         }
                     }
 
-                    let Some((_, ref handle, _)) = stream_state else { continue };
+                    let Some((_, ref handle, _)) = stream_state else {
+                        continue;
+                    };
 
                     // Create a new sink per sound — old sink dropped to stop previous sound
                     drop(current_sink.take());
@@ -107,14 +110,12 @@ fn play_wav(data: Vec<u8>) {
 
 /// Play the mute sound (tries external file first, falls back to embedded)
 pub fn play_mute_sound() {
-    let data = load_external_sound("mute.wav")
-        .unwrap_or_else(|| MUTE_WAV.to_vec());
+    let data = load_external_sound("mute.wav").unwrap_or_else(|| MUTE_WAV.to_vec());
     play_wav(data);
 }
 
 /// Play the unmute sound (tries external file first, falls back to embedded)
 pub fn play_unmute_sound() {
-    let data = load_external_sound("unmute.wav")
-        .unwrap_or_else(|| UNMUTE_WAV.to_vec());
+    let data = load_external_sound("unmute.wav").unwrap_or_else(|| UNMUTE_WAV.to_vec());
     play_wav(data);
 }

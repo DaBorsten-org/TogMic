@@ -8,6 +8,7 @@ version = "0.3.7"
 dependencies = [
  "core-foundation 0.9.4",
  "coreaudio-sys",
+ "gtk",
  "libpulse-binding",
  "once_cell",
  "rodio",
