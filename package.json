@@ -11,7 +11,7 @@
     "bump": "bun scripts/bump.ts",
     "lint": "biome lint src/",
     "format": "biome check --write src/",
-    "test": "vitest"
+    "test": "bun test"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -40,23 +40,23 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
+    "@happy-dom/global-registrator": "^20.11.6",
     "@tailwindcss/typography": "^0.5.20",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
+    "@vitejs/plugin-react": "^6.1.0",
     "autoprefixer": "^10.5.4",
+    "bun-types": "^1.4.0",
     "globals": "^17.7.0",
     "i18next-cli": "^1.67.3",
-    "jsdom": "^29.1.1",
     "postcss": "^8.5.23",
     "shadcn": "^4.14.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5",
-    "vitest": "^4.1.10"
+    "vite": "^8.1.5"
   },
   "trustedDependencies": [
     "@swc/core"

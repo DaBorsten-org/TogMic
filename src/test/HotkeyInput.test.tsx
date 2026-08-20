@@ -1,18 +1,19 @@
+import { describe, expect, it, mock } from "bun:test";
 import { fireEvent, render } from "@testing-library/react";
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
-import { HotkeyInput } from "@/components/HotkeyInput";
 
 // Keep tests focused on key-parsing logic, not the UI library
-vi.mock("@/components/ui/input", () => ({
+mock.module("@/components/ui/input", () => ({
   Input: (props: React.ComponentProps<"input">) =>
     React.createElement("input", props),
 }));
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
-function setup(onChange = vi.fn()) {
+const { HotkeyInput } = await import("@/components/HotkeyInput");
+
+function setup(onChange = mock()) {
   const { getByRole } = render(<HotkeyInput value="" onChange={onChange} />);
   const input = getByRole("textbox");
   fireEvent.focus(input);

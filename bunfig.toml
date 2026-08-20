@@ -1,0 +1,5 @@
+[install]
+linker = "isolated"
+
+[test]
+preload = ["./src/test/setup.ts"]
