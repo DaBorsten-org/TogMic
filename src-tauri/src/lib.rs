@@ -1,4 +1,6 @@
 mod audio;
+#[cfg(target_os = "linux")]
+mod linux_hotkey;
 mod sound;
 
 use audio::{AudioController, AudioDevice, PlatformAudioController};
@@ -546,6 +548,12 @@ fn do_register_hotkey(
 ) -> Result<(), String> {
     let _ = app.global_shortcut().unregister_all();
 
+    // Under GNOME/Wayland the X11 grab below never fires, so hand the binding to GNOME instead.
+    #[cfg(target_os = "linux")]
+    if linux_hotkey::is_active() {
+        return linux_hotkey::register(hotkey, ignore_modifiers);
+    }
+
     let hotkeys_to_register: Vec<String> = if ignore_modifiers {
         // Register all modifier combinations so the hotkey fires regardless of held modifiers
         let prefixes = [
@@ -641,6 +649,12 @@ fn unregister_hotkey(app: AppHandle, state: State<AppState>) -> Result<(), Strin
     let mut profile_lock = state.current_profile.lock_safe();
     *profile_lock = None;
     drop(profile_lock);
+
+    #[cfg(target_os = "linux")]
+    if linux_hotkey::is_active() {
+        return linux_hotkey::unregister();
+    }
+
     app.global_shortcut()
         .unregister_all()
         .map_err(|e| format!("Failed to unregister hotkeys: {}", e))
@@ -666,6 +680,13 @@ async fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// The OS the app is running on, so the UI can name it ("Start with Windows") instead of
+/// hardcoding one platform's wording.
+#[tauri::command]
+fn get_platform() -> &'static str {
+    std::env::consts::OS
 }
 
 #[tauri::command]
@@ -968,7 +989,103 @@ fn set_window_theme(app: AppHandle, theme: String) -> Result<(), String> {
         "dark" => Some(Theme::Dark),
         _ => None,
     };
+    #[cfg(target_os = "linux")]
+    set_gtk_theme_variant(&window, t);
     window.set_theme(t).map_err(|e| e.to_string())
+}
+
+/// `Window::set_theme` is a no-op on Linux: the title bar is drawn by GTK (client-side
+/// decorations) or by the WM from the GTK theme, never by the webview. Two mechanisms
+/// have to be driven to move it:
+///
+/// * `gtk-application-prefer-dark-theme` — works for themes that ship a dark *variant*
+///   (Adwaita, Breeze) and is what GTK mirrors into the `_GTK_THEME_VARIANT` window
+///   property that WMs read for server-side decorations.
+/// * `gtk-theme-name` — needed for theme families where light and dark are separate
+///   themes (`Yaru-prussiangreen` / `Yaru-prussiangreen-dark`), where the preference
+///   flag alone changes nothing.
+///
+/// `None` (= "system") restores the values captured at startup so the window keeps
+/// following the desktop theme.
+#[cfg(target_os = "linux")]
+fn set_gtk_theme_variant(window: &tauri::WebviewWindow, theme: Option<tauri::Theme>) {
+    /// The desktop's own (theme name, prefer-dark) pair, captured before we override it.
+    static SYSTEM_THEME: Lazy<Mutex<Option<(String, bool)>>> = Lazy::new(|| Mutex::new(None));
+
+    let _ = window.run_on_main_thread(move || {
+        use gtk::prelude::GtkSettingsExt;
+
+        let Some(settings) = gtk::Settings::default() else {
+            return;
+        };
+
+        let mut system = SYSTEM_THEME.lock_safe();
+        let (system_name, system_dark) = system
+            .get_or_insert_with(|| {
+                (
+                    settings
+                        .gtk_theme_name()
+                        .map(|s| s.to_string())
+                        .unwrap_or_default(),
+                    settings.is_gtk_application_prefer_dark_theme(),
+                )
+            })
+            .clone();
+
+        let dark = match theme {
+            Some(tauri::Theme::Dark) => true,
+            Some(tauri::Theme::Light) => false,
+            _ => system_dark,
+        };
+
+        let name = match theme {
+            None => system_name.clone(),
+            Some(_) => gtk_theme_for(&system_name, dark).unwrap_or_else(|| system_name.clone()),
+        };
+
+        settings.set_gtk_application_prefer_dark_theme(dark);
+        settings.set_gtk_theme_name(Some(&name));
+    });
+}
+
+/// Maps a GTK theme name onto its light/dark sibling by adding or dropping the `-dark`
+/// suffix, returning `None` unless that sibling is actually installed — falling back to
+/// a missing theme would drop the window onto GTK's Adwaita default, which looks worse
+/// than leaving the decoration alone.
+#[cfg(target_os = "linux")]
+fn gtk_theme_for(current: &str, dark: bool) -> Option<String> {
+    let base = current.strip_suffix("-dark").unwrap_or(current);
+    let candidate = if dark {
+        format!("{base}-dark")
+    } else {
+        base.to_string()
+    };
+    if candidate == current || gtk_theme_installed(&candidate) {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+/// Checks the XDG theme search path for an installed GTK 3 theme of that name.
+#[cfg(target_os = "linux")]
+fn gtk_theme_installed(name: &str) -> bool {
+    let mut roots: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        roots.push(std::path::Path::new(&home).join(".themes"));
+        roots.push(std::path::Path::new(&home).join(".local/share/themes"));
+    }
+    let data_dirs =
+        std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
+    roots.extend(
+        data_dirs
+            .split(':')
+            .map(|d| std::path::Path::new(d).join("themes")),
+    );
+
+    roots
+        .iter()
+        .any(|root| root.join(name).join("gtk-3.0").is_dir())
 }
 
 #[tauri::command]
@@ -1004,7 +1121,16 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // GNOME's custom keybinding launches us with --toggle; forward it to the instance
+            // that actually owns the audio state instead of starting a second one.
+            if argv.iter().any(|a| a == "--toggle") {
+                let state = app.state::<AppState>();
+                if let Err(e) = toggle_mute_internal(&state, app) {
+                    eprintln!("[--toggle] {}", e);
+                }
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -1026,6 +1152,7 @@ pub fn run() {
             unregister_hotkey,
             set_autostart,
             get_autostart_status,
+            get_platform,
             set_close_to_tray,
             update_tray_labels,
             show_update_notification,
@@ -1045,6 +1172,11 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // GNOME's custom keybinding runs `togmic --toggle`. If TogMic is already up the
+            // single-instance plugin forwards it; if it isn't, *we* are that invocation and
+            // have to honour it here instead of just opening the window.
+            let toggle_on_start = std::env::args().any(|a| a == "--toggle");
+
             setup_tray(app.handle())?;
 
             // Initialize persistent audio playback thread
@@ -1126,9 +1258,17 @@ pub fn run() {
                     }
                 }
 
+                // A cold `--toggle` acts like the hotkey did: flip the mic, stay in the tray.
+                if toggle_on_start {
+                    let state = app.state::<AppState>();
+                    if let Err(e) = toggle_mute_internal(&state, app.handle()) {
+                        eprintln!("[--toggle] {}", e);
+                    }
+                }
+
                 // tauri.conf.json now creates the main window hidden by default to avoid a flash.
                 // Show the window only if the user did NOT enable start_minimized.
-                if !app_settings.start_minimized {
+                if !app_settings.start_minimized && !toggle_on_start {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.set_focus();
@@ -1204,8 +1344,76 @@ pub fn run() {
                 audio::start_audio_listeners(on_mute_changed, on_devices_changed);
             }
 
-            // On non-Windows platforms: keep the polling loop as fallback
-            #[cfg(not(target_os = "windows"))]
+            // On Linux: PulseAudio pushes source/server events, so the mute state and the
+            // device list stay in sync through callbacks like on Windows — no poll loop.
+            #[cfg(target_os = "linux")]
+            {
+                let app_handle_mute = app.handle().clone();
+                let on_mute_changed = std::sync::Arc::new(move || {
+                    let state = app_handle_mute.state::<AppState>();
+
+                    // Events arrive for every source, but the profile may only care about
+                    // one — so re-query the profile's own state instead of trusting the
+                    // source the event happened to name.
+                    let profile = {
+                        let lock = state.current_profile.lock_safe();
+                        match lock.as_ref().cloned() {
+                            Some(p) => p,
+                            None => return,
+                        }
+                    };
+
+                    let cached = state.is_muted.load(Ordering::SeqCst);
+                    let system_muted = {
+                        let controller_lock = state.audio_controller.lock_safe();
+                        match controller_lock.as_ref() {
+                            Some(controller) => {
+                                match get_profile_mute_state(controller, &profile, cached) {
+                                    Ok(m) => m,
+                                    Err(_) => return,
+                                }
+                            }
+                            None => return,
+                        }
+                    }; // controller_lock released here
+
+                    if cached != system_muted {
+                        state.is_muted.store(system_muted, Ordering::SeqCst);
+                        let _ = app_handle_mute.emit("mute-state-changed", system_muted);
+                        update_tray_icon(&app_handle_mute, system_muted);
+                    }
+                });
+
+                let app_handle_dev = app.handle().clone();
+                // The daemon also reports a source appearing when only its `is_default`
+                // flag moved, so dedupe against the last list the frontend was told about.
+                let prev_device_ids: Mutex<Option<Vec<String>>> = Mutex::new(None);
+                let on_devices_changed = std::sync::Arc::new(move || {
+                    let state = app_handle_dev.state::<AppState>();
+                    let ids: Vec<String> = {
+                        let controller_lock = state.audio_controller.lock_safe();
+                        let Some(controller) = controller_lock.as_ref() else {
+                            return;
+                        };
+                        match controller.enumerate_input_devices() {
+                            Ok(devices) => devices.into_iter().map(|d| d.id).collect(),
+                            Err(_) => return,
+                        }
+                    };
+
+                    let mut prev = prev_device_ids.lock_safe();
+                    if prev.as_ref() == Some(&ids) {
+                        return;
+                    }
+                    *prev = Some(ids.clone());
+                    let _ = app_handle_dev.emit("devices-changed", ids);
+                });
+
+                audio::start_audio_listeners(on_mute_changed, on_devices_changed);
+            }
+
+            // On macOS: keep the polling loop as fallback
+            #[cfg(target_os = "macos")]
             {
                 let app_handle = app.handle().clone();
                 std::thread::spawn(move || {
@@ -1265,6 +1473,14 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // The GNOME keybinding lives in dconf and outlives the process, so leaving it
+            // behind would make the hotkey relaunch TogMic after the user quit it.
+            #[cfg(target_os = "linux")]
+            if matches!(_event, tauri::RunEvent::Exit) && linux_hotkey::is_active() {
+                let _ = linux_hotkey::unregister();
+            }
+        });
 }

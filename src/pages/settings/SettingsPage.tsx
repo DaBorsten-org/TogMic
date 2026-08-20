@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { Download } from "lucide-react";
@@ -203,6 +204,9 @@ export function SettingsPage({
 
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Autostart is wired up on every platform, so the label has to name the one we run on
+  // rather than always saying "Windows".
+  const [platform, setPlatform] = useState<string | null>(null);
 
   const updateInfo = useMemo(
     () =>
@@ -215,6 +219,21 @@ export function SettingsPage({
         : null,
     [availableUpdate, t],
   );
+
+  useEffect(() => {
+    invoke<string>("get_platform")
+      .then(setPlatform)
+      .catch(() => setPlatform(null));
+  }, []);
+
+  const autostartLabel = useMemo(() => {
+    const osName = { windows: "Windows", macos: "macOS", linux: "Linux" }[
+      platform ?? ""
+    ];
+    // Until the platform resolves (and on anything unrecognised) fall back to wording
+    // that names no OS at all, so the label is never wrong — only vaguer.
+    return osName ? t("startWithOs", { os: osName }) : t("startWithSystem");
+  }, [platform, t]);
 
   useEffect(() => {
     // ponytail: syncing controlled prop to state — legit derived-state pattern
@@ -413,7 +432,9 @@ export function SettingsPage({
                 <div className="flex gap-2">
                   <Button
                     onClick={() => changeLanguage("en")}
-                    variant={i18n.language === "en" ? "default" : "outline"}
+                    variant={
+                      i18n.resolvedLanguage === "en" ? "default" : "outline"
+                    }
                     size="lg"
                     className="flex-1"
                   >
@@ -421,7 +442,9 @@ export function SettingsPage({
                   </Button>
                   <Button
                     onClick={() => changeLanguage("de")}
-                    variant={i18n.language === "de" ? "default" : "outline"}
+                    variant={
+                      i18n.resolvedLanguage === "de" ? "default" : "outline"
+                    }
                     size="lg"
                     className="flex-1"
                   >
@@ -487,10 +510,10 @@ export function SettingsPage({
                       htmlFor="autostart"
                       className="text-base font-medium"
                     >
-                      {t("startWithWindows")}
+                      {autostartLabel}
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      {t("startWithWindowsDesc")}
+                      {t("startWithSystemDesc")}
                     </p>
                   </div>
                   <Switch
