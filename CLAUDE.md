@@ -18,7 +18,7 @@ bun run build
 bun run tauri build
 
 # Lint
-bunx eslint src/
+bun run lint
 ```
 
 No test suite is currently configured.

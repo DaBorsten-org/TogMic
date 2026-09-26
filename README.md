@@ -103,7 +103,7 @@ bun run tauri build
 ### Lint
 
 ```bash
-bunx eslint src/
+bun run lint
 ```
 
 ## Project Structure
