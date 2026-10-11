@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { MuteIndicator } from "@/components/MuteIndicator";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { useApp } from "@/contexts/useApp";
 import { useMuteState } from "@/contexts/useMuteState";
 import { cn } from "@/lib/utils";
+import { ActivityLog } from "@/pages/dashboard/ActivityLog";
 
 const KEY_LABELS: Record<string, string> = {
   CommandOrControl: "Ctrl",
@@ -20,23 +21,10 @@ const formatKey = (key: string) => KEY_LABELS[key] ?? key;
 
 export function DashboardPage() {
   const { t } = useTranslation();
-  const { activeProfile, devices } = useApp();
+  const { activeProfile, devices, resolveDeviceLabel } = useApp();
   const { isMuted } = useMuteState();
 
-  const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
-
-  const resolveDeviceLabel = useCallback(
-    (deviceId: string) => {
-      if (deviceId === defaultDeviceId) return t("defaultDevice");
-      if (deviceId === allDevicesId) return t("allDevices");
-      return (
-        devices.find((device) => device.id === deviceId)?.name ??
-        t("unknownDevice")
-      );
-    },
-    [devices, t],
-  );
 
   const deviceCount = useMemo(
     () =>
@@ -108,7 +96,7 @@ export function DashboardPage() {
           }}
         >
           <CardHeader className="pb-2">
-            <CardTitle className="font-mono text-[10px] font-normal text-muted-foreground uppercase tracking-[0.2em]">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("activeProfile")}
             </CardTitle>
           </CardHeader>
@@ -173,6 +161,8 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ActivityLog resolveDeviceLabel={resolveDeviceLabel} />
     </div>
   );
 }

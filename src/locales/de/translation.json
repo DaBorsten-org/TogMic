@@ -20,6 +20,13 @@
   "active": "AKTIV",
   "noProfile": "KEIN PROFIL",
 
+  "activityLog": "Verlauf",
+  "activityClear": "Leeren",
+  "activityMuted": "Stummgeschaltet",
+  "activityUnmuted": "Stummschaltung aufgehoben",
+  "activityEmpty": "Noch keine Aktivität.",
+  "activityEmptyHint": "Sobald du dein Mikrofon umschaltest, erscheint es hier.",
+
   "yourProfiles": "Deine Profile",
   "yourProfilesDesc": "Profile erstellen und verwalten",
   "refresh": "Aktualisieren",
@@ -42,6 +49,7 @@
   "defaultDevice": "Standard",
   "allDevices": "Alle Geräte",
   "unknownDevice": "Unbekanntes Gerät",
+  "deviceDisconnected": "{{name}} (nicht verbunden)",
   "noAudioDevices": "Keine Audiogeräte gefunden",
   "profileNameRequired": "Profilname ist erforderlich",
   "hotkeyRequired": "Tastenkürzel ist erforderlich",

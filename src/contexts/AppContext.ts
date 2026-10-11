@@ -11,6 +11,8 @@ export interface HotkeyProfile {
   name: string;
   toggleKey: string;
   deviceIds: string[];
+  // Last known display name per device ID, maintained by the backend
+  deviceNames?: Record<string, string>;
   ignoreModifiers?: boolean;
 }
 
@@ -32,6 +34,7 @@ export interface AppContextType {
   devices: AudioDevice[];
   profiles: HotkeyProfile[];
   activeProfile: HotkeyProfile | null;
+  resolveDeviceLabel: (deviceId: string) => string;
   refreshDevices: () => Promise<void>;
   saveProfile: (profile: HotkeyProfile) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;

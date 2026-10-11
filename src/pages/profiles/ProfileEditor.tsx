@@ -40,7 +40,8 @@ export function ProfileEditor({
   open,
 }: ProfileEditorProps) {
   const { t } = useTranslation();
-  const { devices, saveProfile, refreshDevices } = useApp();
+  const { devices, saveProfile, refreshDevices, resolveDeviceLabel } =
+    useApp();
 
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
@@ -63,16 +64,6 @@ export function ProfileEditor({
   );
   const [error, setError] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  const resolveDeviceLabel = useCallback(
-    (deviceId: string) => {
-      if (deviceId === defaultDeviceId) return t("defaultDevice");
-      if (deviceId === allDevicesId) return t("allDevices");
-      const device = devices.find((entry) => entry.id === deviceId);
-      return device?.name ?? t("unknownDevice");
-    },
-    [devices, t],
-  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -100,6 +91,8 @@ export function ProfileEditor({
           name: name.trim(),
           toggleKey: toggleKey,
           deviceIds: [selectedDeviceId],
+          // Keeps the name of a device that stays selected while unplugged
+          deviceNames: profile?.deviceNames,
           ignoreModifiers,
         };
 

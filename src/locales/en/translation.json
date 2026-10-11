@@ -20,6 +20,13 @@
   "active": "ACTIVE",
   "noProfile": "NO PROFILE",
 
+  "activityLog": "Activity",
+  "activityClear": "Clear",
+  "activityMuted": "Muted",
+  "activityUnmuted": "Unmuted",
+  "activityEmpty": "No activity yet.",
+  "activityEmptyHint": "Toggle your microphone and it will show up here.",
+
   "yourProfiles": "Your Profiles",
   "yourProfilesDesc": "Create and manage your profiles",
   "refresh": "Refresh",
@@ -42,6 +49,7 @@
   "defaultDevice": "Default",
   "allDevices": "All Devices",
   "unknownDevice": "Unknown Device",
+  "deviceDisconnected": "{{name}} (disconnected)",
   "noAudioDevices": "No audio devices found",
   "profileNameRequired": "Profile name is required",
   "hotkeyRequired": "Hotkey is required",

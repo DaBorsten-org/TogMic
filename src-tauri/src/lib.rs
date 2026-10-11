@@ -5,6 +5,7 @@ mod sound;
 
 use audio::{AudioController, AudioDevice, PlatformAudioController};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 // note: mpsc/debounce not used yet
@@ -42,6 +43,10 @@ pub struct HotkeyProfile {
     pub name: String,
     pub toggle_key: String,
     pub device_ids: Vec<String>,
+    /// Last known display name per device ID. Lets a profile be re-bound when the OS hands
+    /// the same microphone a new ID, and gives the UI a name while it is unplugged.
+    #[serde(default)]
+    pub device_names: HashMap<String, String>,
     #[serde(default)]
     pub ignore_modifiers: bool,
 }
@@ -117,6 +122,7 @@ impl Default for AppState {
 }
 
 const ALL_DEVICES_ID: &str = "all-mics";
+const DEFAULT_DEVICE_ID: &str = "default-mic";
 
 const TRAY_MUTED_DARK_BYTES: &[u8] = include_bytes!("../icons/tray-muted-dark.png");
 const TRAY_MUTED_LIGHT_BYTES: &[u8] = include_bytes!("../icons/tray-muted-light.png");
@@ -259,6 +265,81 @@ fn resolve_device_ids(
     }
 }
 
+/// Device names compared without the instance counter Windows puts in front of the
+/// description when the same hardware shows up as a new endpoint, e.g. on another USB
+/// port: "Microphone (2- USB Audio Device)" matches "Microphone (USB Audio Device)".
+fn normalize_device_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut rest = name;
+    while let Some(pos) = rest.find('(') {
+        out.push_str(&rest[..=pos]);
+        rest = &rest[pos + 1..];
+        let digits = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+        if digits > 0 && rest[digits..].starts_with("- ") {
+            rest = &rest[digits + 2..];
+        }
+    }
+    out.push_str(rest);
+    out.trim().to_lowercase()
+}
+
+/// Remember the names of the profile's connected devices, and re-bind device IDs that no
+/// longer exist to the connected device with the same name. Windows assigns a new endpoint
+/// ID when a USB microphone moves to another port or its driver is reinstalled, which
+/// would otherwise leave the profile pointing at a dead ID. Returns true if it changed.
+fn rebind_profile_devices(profile: &mut HotkeyProfile, devices: &[AudioDevice]) -> bool {
+    let mut changed = false;
+
+    for i in 0..profile.device_ids.len() {
+        let id = profile.device_ids[i].clone();
+        if id == DEFAULT_DEVICE_ID || id == ALL_DEVICES_ID {
+            continue;
+        }
+
+        if let Some(device) = devices.iter().find(|d| d.id == id) {
+            if profile.device_names.get(&id) != Some(&device.name) {
+                profile.device_names.insert(id, device.name.clone());
+                changed = true;
+            }
+            continue;
+        }
+
+        let Some(saved_name) = profile.device_names.get(&id) else {
+            continue;
+        };
+        let unused: Vec<&AudioDevice> = devices
+            .iter()
+            .filter(|d| !profile.device_ids.contains(&d.id))
+            .collect();
+        let mut matches: Vec<&AudioDevice> = unused
+            .iter()
+            .copied()
+            .filter(|d| &d.name == saved_name)
+            .collect();
+        if matches.is_empty() {
+            let wanted = normalize_device_name(saved_name);
+            matches = unused
+                .iter()
+                .copied()
+                .filter(|d| normalize_device_name(&d.name) == wanted)
+                .collect();
+        }
+
+        // Only re-bind on an unambiguous match — two identical microphones can't be told apart.
+        if let [device] = matches.as_slice() {
+            let (new_id, new_name) = (device.id.clone(), device.name.clone());
+            profile.device_names.insert(new_id.clone(), new_name);
+            profile.device_ids[i] = new_id;
+            changed = true;
+        }
+    }
+
+    let before = profile.device_names.len();
+    let device_ids = &profile.device_ids;
+    profile.device_names.retain(|id, _| device_ids.contains(id));
+    changed || profile.device_names.len() != before
+}
+
 fn get_profile_mute_state(
     controller: &PlatformAudioController,
     profile: &HotkeyProfile,
@@ -391,6 +472,30 @@ fn get_audio_devices(state: State<AppState>) -> Result<Vec<AudioDevice>, String>
     } else {
         Err("Audio controller not initialized".to_string())
     }
+}
+
+/// Run `rebind_profile_devices` over the saved profiles against the currently connected
+/// devices. Returns the updated profiles for the frontend to persist, or None if nothing
+/// changed.
+#[tauri::command]
+fn sync_profile_devices(
+    mut profiles: Vec<HotkeyProfile>,
+    state: State<AppState>,
+) -> Result<Option<Vec<HotkeyProfile>>, String> {
+    let devices = {
+        let controller_lock = state.audio_controller.lock_safe();
+        match controller_lock.as_ref() {
+            Some(controller) => controller.enumerate_input_devices()?,
+            None => return Err("Audio controller not initialized".to_string()),
+        }
+    };
+
+    let mut changed = false;
+    for profile in &mut profiles {
+        changed |= rebind_profile_devices(profile, &devices);
+    }
+
+    Ok(changed.then_some(profiles))
 }
 
 #[tauri::command]
@@ -1142,6 +1247,7 @@ pub fn run() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             get_audio_devices,
+            sync_profile_devices,
             toggle_mute,
             set_mute,
             get_mute_state,
@@ -1202,12 +1308,20 @@ pub fn run() {
                     .unwrap_or_default();
 
                 if let Some(active_id) = active_profile_id {
-                    if let Some(profile) = profiles.iter().find(|p| p.id == active_id).cloned() {
+                    if let Some(mut profile) = profiles.iter().find(|p| p.id == active_id).cloned()
+                    {
                         // Set active profile and sync state/tray
                         let state = app.state::<AppState>();
                         let mut profile_lock = state.current_profile.lock_safe();
-                        *profile_lock = Some(profile.clone());
                         let controller_lock = state.audio_controller.lock_safe();
+                        // The saved device ID may be stale (mic moved to another USB port
+                        // while TogMic was closed); the frontend persists the re-binding.
+                        if let Some(controller) = controller_lock.as_ref() {
+                            if let Ok(devices) = controller.enumerate_input_devices() {
+                                rebind_profile_devices(&mut profile, &devices);
+                            }
+                        }
+                        *profile_lock = Some(profile.clone());
                         if let Some(controller) = controller_lock.as_ref() {
                             // Apply start_muted immediately before the frontend loads
                             if app_settings.start_muted {

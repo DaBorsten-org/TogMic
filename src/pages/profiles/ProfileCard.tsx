@@ -38,12 +38,15 @@ export const ProfileCard = memo(function ProfileCard({
   onEdit,
 }: ProfileCardProps) {
   const { t } = useTranslation();
-  const { setActiveProfile, deactivateProfile, deleteProfile, devices } =
-    useApp();
+  const {
+    setActiveProfile,
+    deactivateProfile,
+    deleteProfile,
+    resolveDeviceLabel,
+  } = useApp();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
 
-  const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";
 
   const handleActivate = useCallback(async () => {
@@ -84,14 +87,8 @@ export const ProfileCard = memo(function ProfileCard({
       return t("allDevices");
     }
 
-    return profile.deviceIds
-      .map((id) => {
-        if (id === defaultDeviceId) return t("defaultDevice");
-        if (id === allDevicesId) return t("allDevices");
-        return devices.find((d) => d.id === id)?.name ?? t("unknownDevice");
-      })
-      .join(", ");
-  }, [profile.deviceIds, devices, t]);
+    return profile.deviceIds.map(resolveDeviceLabel).join(", ");
+  }, [profile.deviceIds, resolveDeviceLabel, t]);
 
   return (
     <Card

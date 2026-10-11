@@ -23,11 +23,33 @@ import {
   type Config,
   type HotkeyProfile,
 } from "@/contexts/AppContext";
-import { MuteContext, type MuteContextType } from "@/contexts/MuteContext";
+import {
+  MuteContext,
+  type MuteContextType,
+  type MuteLogEntry,
+} from "@/contexts/MuteContext";
 import {
   SettingsContext,
   type SettingsContextType,
 } from "@/contexts/SettingsContext";
+
+const MAX_ACTIVITY_ENTRIES = 50;
+const ACTIVITY_STORAGE_KEY = "togmic.activity";
+
+// The log is display-only history, so it lives in localStorage rather than config.json:
+// it can be read synchronously on first render and never races with saveConfig().
+const loadActivity = (): MuteLogEntry[] => {
+  try {
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(ACTIVITY_STORAGE_KEY) ?? "[]",
+    );
+    return Array.isArray(parsed)
+      ? (parsed as MuteLogEntry[]).slice(0, MAX_ACTIVITY_ENTRIES)
+      : [];
+  } catch {
+    return [];
+  }
+};
 
 export function AppProvider({
   children,
@@ -44,6 +66,12 @@ export function AppProvider({
     null,
   );
   const [isMuted, setIsMuted] = useState(false);
+  const [activity, setActivity] = useState<MuteLogEntry[]>(loadActivity);
+  const isMutedRef = useRef(false);
+  const activityIdRef = useRef(0);
+  // Startup sync and profile switches change the displayed state without the user
+  // toggling anything, so they must not show up in the activity log.
+  const suppressActivityRef = useRef(true);
   const [settings, setSettings] = useState<AppSettings>({
     startMuted: true,
     autostart: true,
@@ -72,6 +100,38 @@ export function AppProvider({
     settingsRef.current = settings;
   });
 
+  // Single entry point for mute state updates. A toggle reaches us twice (command
+  // result + "mute-state-changed" event), so the ref dedupes before logging.
+  const applyMuteState = useCallback((muted: boolean) => {
+    if (isMutedRef.current === muted) return;
+    isMutedRef.current = muted;
+    setIsMuted(muted);
+    if (suppressActivityRef.current) return;
+
+    const profile = activeProfileRef.current;
+    const timestamp = Date.now();
+    // Time-based so ids stay unique next to entries restored from a previous run
+    activityIdRef.current = Math.max(timestamp, activityIdRef.current + 1);
+    const entry: MuteLogEntry = {
+      id: activityIdRef.current,
+      muted,
+      timestamp,
+      profileName: profile?.name ?? null,
+      deviceIds: profile?.deviceIds ?? [],
+    };
+    setActivity((prev) => [entry, ...prev].slice(0, MAX_ACTIVITY_ENTRIES));
+  }, []);
+
+  const clearActivity = useCallback(() => setActivity([]), []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(activity));
+    } catch (error) {
+      console.error("Failed to persist activity log:", error);
+    }
+  }, [activity]);
+
   const getStore = useCallback(async () => {
     storeRef.current ??= await load("config.json", {
       autoSave: false,
@@ -96,7 +156,7 @@ export function AppProvider({
   const loadConfig = useCallback(async () => {
     try {
       const store = await getStore();
-      const loadedProfiles =
+      const storedProfiles =
         (await store.get<HotkeyProfile[]>("profiles")) ?? [];
       const loadedActiveProfileId =
         (await store.get<string | null>("activeProfileId")) ?? null;
@@ -107,6 +167,17 @@ export function AppProvider({
         closeToTray: true,
         startMinimized: true,
       };
+
+      // Heal stale device IDs before the active profile is handed to the backend
+      const syncedProfiles = await invoke<HotkeyProfile[] | null>(
+        "sync_profile_devices",
+        { profiles: storedProfiles },
+      ).catch(() => null);
+      const loadedProfiles = syncedProfiles ?? storedProfiles;
+      if (syncedProfiles) {
+        await store.set("profiles", syncedProfiles);
+        await store.save();
+      }
 
       setProfiles(loadedProfiles);
       setSettings(loadedSettings);
@@ -127,7 +198,7 @@ export function AppProvider({
           });
           setActiveProfileState(active);
           const muteState = await invoke<boolean>("get_mute_state");
-          setIsMuted(muteState);
+          applyMuteState(muteState);
         }
       }
 
@@ -136,7 +207,7 @@ export function AppProvider({
       console.error("Failed to load config:", error);
       setConfigLoaded(true);
     }
-  }, [getStore]);
+  }, [getStore, applyMuteState]);
 
   // Save config to store — stable callback that reads from refs
   const saveConfig = useCallback(
@@ -166,41 +237,95 @@ export function AppProvider({
     [getStore],
   );
 
+  // Let the backend record device names and re-bind profiles whose device ID vanished
+  // (Windows assigns a new ID when a USB mic moves to another port), then persist it.
+  const syncProfileDevices = useCallback(async () => {
+    if (profilesRef.current.length === 0) return;
+    const synced = await invoke<HotkeyProfile[] | null>(
+      "sync_profile_devices",
+      { profiles: profilesRef.current },
+    );
+    if (!synced) return;
+
+    const previousActive = activeProfileRef.current;
+    const active = synced.find((p) => p.id === previousActive?.id) ?? null;
+    profilesRef.current = synced;
+    setProfiles(synced);
+    await saveConfig({ profiles: synced });
+
+    if (
+      !active ||
+      active.deviceIds.join() === previousActive?.deviceIds.join()
+    ) {
+      return;
+    }
+
+    // The active profile now targets a different device ID — hand it to the backend
+    const wasSuppressed = suppressActivityRef.current;
+    suppressActivityRef.current = true;
+    try {
+      await invoke("set_active_profile", { profile: active });
+      setActiveProfileState(active);
+      applyMuteState(await invoke<boolean>("get_mute_state"));
+    } finally {
+      suppressActivityRef.current = wasSuppressed;
+    }
+  }, [saveConfig, applyMuteState]);
+
   // Refresh devices list
   const refreshDevices = useCallback(async () => {
     try {
       const devicesList = await invoke<AudioDevice[]>("get_audio_devices");
       setDevices(devicesList);
+      await syncProfileDevices();
     } catch (error) {
       console.error("Failed to get devices:", error);
     }
-  }, []);
+  }, [syncProfileDevices]);
+
+  const resolveDeviceLabel = useCallback(
+    (deviceId: string) => {
+      if (deviceId === "default-mic") return t("defaultDevice");
+      if (deviceId === "all-mics") return t("allDevices");
+      const connected = devices.find((device) => device.id === deviceId);
+      if (connected) return connected.name;
+      // Not connected right now: fall back to the name a profile remembered for it
+      const name = profiles.find((p) => p.deviceNames?.[deviceId])
+        ?.deviceNames?.[deviceId];
+      return name ? t("deviceDisconnected", { name }) : t("unknownDevice");
+    },
+    [devices, profiles, t],
+  );
 
   // Toggle mute state
   const toggleMute = useCallback(async () => {
     try {
       const newState = await invoke<boolean>("toggle_mute");
-      setIsMuted(newState);
+      applyMuteState(newState);
     } catch (error) {
       console.error("Failed to toggle mute:", error);
       throw error;
     }
-  }, []);
+  }, [applyMuteState]);
 
   // Set mute state explicitly
-  const setMute = useCallback(async (muted: boolean, silent?: boolean) => {
-    try {
-      await invoke("set_mute", { muted, silent });
-      setIsMuted(muted);
-    } catch (error) {
-      console.error("Failed to set mute:", error);
-      throw error;
-    }
-  }, []);
+  const setMute = useCallback(
+    async (muted: boolean, silent?: boolean) => {
+      try {
+        await invoke("set_mute", { muted, silent });
+        applyMuteState(muted);
+      } catch (error) {
+        console.error("Failed to set mute:", error);
+        throw error;
+      }
+    },
+    [applyMuteState],
+  );
 
   // Set active profile
   const setActiveProfile = useCallback(
     async (profile: HotkeyProfile) => {
+      suppressActivityRef.current = true;
       try {
         // Set in backend
         await invoke("set_active_profile", { profile });
@@ -217,13 +342,15 @@ export function AppProvider({
 
         // Get current mute state
         const muteState = await invoke<boolean>("get_mute_state");
-        setIsMuted(muteState);
+        applyMuteState(muteState);
       } catch (error) {
         console.error("Failed to set active profile:", error);
         throw error;
+      } finally {
+        suppressActivityRef.current = false;
       }
     },
-    [saveConfig],
+    [saveConfig, applyMuteState],
   );
 
   const saveProfile = useCallback(
@@ -253,12 +380,16 @@ export function AppProvider({
         if (activeProfileRef.current?.id === profile.id) {
           await setActiveProfile(profile);
         }
+
+        // Record the name of the newly selected device
+        profilesRef.current = updatedProfiles;
+        await syncProfileDevices().catch(console.error);
       } catch (error) {
         console.error("Failed to save profile:", error);
         throw error;
       }
     },
-    [saveConfig, setActiveProfile],
+    [saveConfig, setActiveProfile, syncProfileDevices],
   );
 
   // Delete profile
@@ -361,7 +492,7 @@ export function AppProvider({
     // Listen for mute state changes
     const unlistenMute = listen<boolean>("mute-state-changed", (event) => {
       if (mounted) {
-        setIsMuted(event.payload);
+        applyMuteState(event.payload);
       }
     });
 
@@ -402,7 +533,7 @@ export function AppProvider({
       void unlistenDevices.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());
     };
-  }, [loadConfig, refreshDevices, t]);
+  }, [loadConfig, refreshDevices, applyMuteState, t]);
 
   // Apply startup-only settings once after config is loaded.
   // This ensures toggling `startMuted` in settings doesn't immediately mute the app;
@@ -414,8 +545,11 @@ export function AppProvider({
     // start_muted is now handled by the Rust backend immediately at launch,
     // so we only need to sync the frontend's isMuted state with the backend.
     invoke<boolean>("get_mute_state")
-      .then((muted) => setIsMuted(muted))
-      .catch(console.error);
+      .then((muted) => applyMuteState(muted))
+      .catch(console.error)
+      .finally(() => {
+        suppressActivityRef.current = false;
+      });
 
     // Sync close-to-tray setting with backend on startup
     invoke("set_close_to_tray", { enabled: settings.closeToTray }).catch(
@@ -455,6 +589,7 @@ export function AppProvider({
     settings.startMuted,
     settings.closeToTray,
     settings.checkUpdates,
+    applyMuteState,
     t,
   ]);
 
@@ -463,8 +598,10 @@ export function AppProvider({
       isMuted,
       toggleMute,
       setMute,
+      activity,
+      clearActivity,
     }),
-    [isMuted, toggleMute, setMute],
+    [isMuted, toggleMute, setMute, activity, clearActivity],
   );
 
   const appValue: AppContextType = useMemo(
@@ -472,6 +609,7 @@ export function AppProvider({
       devices,
       profiles,
       activeProfile,
+      resolveDeviceLabel,
       refreshDevices,
       saveProfile,
       deleteProfile,
@@ -483,6 +621,7 @@ export function AppProvider({
       devices,
       profiles,
       activeProfile,
+      resolveDeviceLabel,
       refreshDevices,
       saveProfile,
       deleteProfile,

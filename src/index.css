@@ -218,4 +218,36 @@ body {
   html {
     @apply font-sans;
   }
+
+  /* Themed scrollbars: slim, rounded thumb derived from the theme tokens so it
+     follows light/dark automatically. No track, no arrow buttons. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+    background-color: color-mix(
+      in oklch,
+      var(--muted-foreground) 35%,
+      transparent
+    );
+  }
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background-color: color-mix(
+      in oklch,
+      var(--muted-foreground) 65%,
+      transparent
+    );
+  }
 }
