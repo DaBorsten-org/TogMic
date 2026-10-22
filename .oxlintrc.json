@@ -8,7 +8,11 @@
   "categories": {
     "correctness": "error"
   },
-  "ignorePatterns": ["dist", "src/components/ui/**", "src/@types/resources.d.ts"],
+  "ignorePatterns": [
+    "dist",
+    "src/components/ui/**",
+    "src/@types/resources.d.ts"
+  ],
   "rules": {
     "eslint/no-var": "error",
     "eslint/prefer-const": "error",

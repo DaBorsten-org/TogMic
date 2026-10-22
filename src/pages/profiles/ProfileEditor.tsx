@@ -40,8 +40,7 @@ export function ProfileEditor({
   open,
 }: ProfileEditorProps) {
   const { t } = useTranslation();
-  const { devices, saveProfile, refreshDevices, resolveDeviceLabel } =
-    useApp();
+  const { devices, saveProfile, refreshDevices, resolveDeviceLabel } = useApp();
 
   const defaultDeviceId = "default-mic";
   const allDevicesId = "all-mics";

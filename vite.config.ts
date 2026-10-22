@@ -15,7 +15,8 @@ function reactCompiler(): Plugin {
     enforce: "pre",
     async transform(code, id) {
       const [filename] = id.split("?");
-      if (!/\.[jt]sx$/.test(filename) || filename.includes("/node_modules/")) return;
+      if (!/\.[jt]sx$/.test(filename) || filename.includes("/node_modules/"))
+        return;
 
       const result = await transform(filename, code, {
         sourcemap: true,
@@ -23,7 +24,9 @@ function reactCompiler(): Plugin {
         reactCompiler: { target: "19" },
       });
       if (result.fatal) {
-        this.error(result.errors.map((e) => e.codeframe ?? e.message).join("\n"));
+        this.error(
+          result.errors.map((e) => e.codeframe ?? e.message).join("\n"),
+        );
       }
       for (const e of result.errors) this.warn(e.message);
 

@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
-      - 'togmic-v*'
+      - "v*"
+      - "togmic-v*"
 
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 env:
@@ -18,10 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'blacksmith-2vcpu-windows-2025'
-            args: ''
-          - platform: 'ubuntu-24.04'
-            args: ''
+          - platform: "blacksmith-2vcpu-windows-2025"
+            args: ""
+          - platform: "ubuntu-24.04"
+            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -62,7 +62,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
         run: bun install
@@ -75,8 +75,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: togmic-v__VERSION__
-          releaseName: 'TogMic v__VERSION__'
-          releaseBody: 'See the assets to download and install this version.'
+          releaseName: "TogMic v__VERSION__"
+          releaseBody: "See the assets to download and install this version."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
